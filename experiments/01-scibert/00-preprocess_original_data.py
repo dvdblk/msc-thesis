@@ -1,46 +1,11 @@
 # !/usr/bin/env python3
 # *-* coding: UTF-8 *-*
 # Author: Jessica Roady
-
+import os
 from typing import Optional
 import pandas as pd
 from langdetect import detect
-
-
-def read_df(
-    filepath: str,
-    coltypes: dict,
-    keep_default_na: Optional[bool] = True,
-    skiprows: Optional[list[int]] = None,
-    new_names: Optional[list[str]] = None,
-    index_col: Optional[int] = None,
-) -> pd.DataFrame:
-
-    df = pd.read_csv(
-        filepath,
-        keep_default_na=keep_default_na,
-        skiprows=skiprows,
-        names=new_names,
-        index_col=index_col,
-        sep="\t",
-        encoding="utf-8",
-    )
-
-    df = df.astype(coltypes)
-
-    return df
-
-
-def write_df(
-    df,
-    filename,
-    index: bool,
-    na_rep: Optional[str] = None,
-    header: Optional[bool] = True,
-) -> None:
-    df.to_csv(
-        filename, sep="\t", index=index, na_rep=na_rep, header=header, encoding="utf-8"
-    )
+from helpers import read_df, write_df
 
 
 def strip_quotes(original_file, stripped_file):
@@ -132,8 +97,10 @@ def main():
     """
 
     """ ZORA """
+    base_path = os.path.join(os.path.dirname(__file__), "..")
+
     zora_original = read_df(
-        "data/full_datasets/original/zora_original.tsv",
+        os.path.join(base_path, "data/full_datasets/original/zora_original.tsv"),
         coltypes={
             "sdg": "string",
             "author": "string",
@@ -162,16 +129,23 @@ def main():
     zora_titles_concatenated = extract_concat_title(zora_lang_filtered)
 
     write_df(
-        zora_titles_concatenated, "data/full_datasets/zora_preproc.tsv", index=True
+        zora_titles_concatenated,
+        os.path.join(base_path, "data/full_datasets/zora_preproc.tsv"),
+        index=True,
     )
 
     """ OSDG """
     strip_quotes(
-        "data/full_datasets/original/osdg_original.tsv",
-        "data/full_datasets/original/osdg_original_stripped.tsv",
+        os.path.join(base_path, "data/full_datasets/original/osdg_original.tsv"),
+        os.path.join(
+            base_path,
+            "data/full_datasets/original/osdg_original_stripped.tsv",
+        ),
     )
     osdg_stripped = read_df(
-        "data/full_datasets/original/osdg_original_stripped.tsv",
+        os.path.join(
+            base_path, "data/full_datasets/original/osdg_original_stripped.tsv"
+        ),
         coltypes={
             "doi": "string",
             "text_id": "string",
@@ -188,7 +162,11 @@ def main():
     osdg_iaa_50 = filter_agreement(osdg_en)
     osdg_iaa_50_pos = filter_negative_samples(osdg_iaa_50)
 
-    write_df(osdg_iaa_50_pos, "data/full_datasets/osdg_preproc.tsv", index=True)
+    write_df(
+        osdg_iaa_50_pos,
+        os.path.join(base_path, "data/full_datasets/osdg_preproc.tsv"),
+        index=True,
+    )
 
 
 if __name__ == "__main__":

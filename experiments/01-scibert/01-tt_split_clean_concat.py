@@ -9,52 +9,25 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
-from typing import Optional
+
+from helpers import read_df, write_df
 
 
-def read_df(
-    filepath: str,
-    coltypes: dict,
-    keep_default_na: Optional[bool] = True,
-    skiprows: Optional[list[int]] = None,
-    new_names: Optional[list[str]] = None,
-    index_col: Optional[int] = None,
-) -> pd.DataFrame:
+nltk.download("stopwords")
+nltk.download("punkt")
 
-    df = pd.read_csv(
-        filepath,
-        keep_default_na=keep_default_na,
-        skiprows=skiprows,
-        names=new_names,
-        index_col=index_col,
-        sep="\t",
-        encoding="utf-8",
-    )
-
-    df = df.astype(coltypes)
-
-    return df
-
-
-def write_df(
-    df,
-    filename,
-    index: bool,
-    na_rep: Optional[str] = None,
-    header: Optional[bool] = True,
-) -> None:
-    df.to_csv(
-        filename, sep="\t", index=index, na_rep=na_rep, header=header, encoding="utf-8"
-    )
-
+base_path = os.path.join(os.path.dirname(__file__), "..")
 
 stop = stopwords.words("english")
-if not os.path.exists("data/train_test"):
-    os.makedirs("data/train_test")
-if not os.path.exists("data/dists"):
-    os.makedirs("data/dists")
+test_dir_path = os.path.join(base_path, "data/train_test")
+dists_dir_path = os.path.join(base_path, "data/dists")
+
+for path in [test_dir_path, dists_dir_path]:
+    if not os.path.exists(path):
+        os.makedirs(path)
 
 
 def clean_text(c):
@@ -154,7 +127,7 @@ def main():
     """
 
     zora_preproc = read_df(
-        "data/full_datasets/zora_preproc.tsv",
+        os.path.join(base_path, "data/full_datasets/zora_preproc.tsv"),
         coltypes={
             "sdg": "string",
             "author": "string",
@@ -165,7 +138,7 @@ def main():
         index_col=0,
     )
     osdg_preproc = read_df(
-        "data/full_datasets/osdg_preproc.tsv",
+        os.path.join(base_path, "data/full_datasets/osdg_preproc.tsv"),
         coltypes={
             "doi": "string",
             "text_id": "string",
@@ -222,15 +195,47 @@ def main():
     osdg_test_clean["abstract"] = osdg_test_clean["abstract"].apply(remove_stopwords)
 
     """ Write out raw and clean files """
-    write_df(zora_train_raw, "data/train_test/zora_train_raw.tsv", index=True)
-    write_df(zora_test_raw, "data/train_test/zora_test_raw.tsv", index=True)
-    write_df(zora_train_clean, "data/train_test/zora_train_clean.tsv", index=True)
-    write_df(zora_test_clean, "data/train_test/zora_test_clean.tsv", index=True)
+    write_df(
+        zora_train_raw,
+        os.path.join(base_path, "data/train_test/zora_train_raw.tsv"),
+        index=True,
+    )
+    write_df(
+        zora_test_raw,
+        os.path.join(base_path, "data/train_test/zora_test_raw.tsv"),
+        index=True,
+    )
+    write_df(
+        zora_train_clean,
+        os.path.join(base_path, "data/train_test/zora_train_clean.tsv"),
+        index=True,
+    )
+    write_df(
+        zora_test_clean,
+        os.path.join(base_path, "data/train_test/zora_test_clean.tsv"),
+        index=True,
+    )
 
-    write_df(osdg_train_raw, "data/train_test/osdg_train_raw.tsv", index=True)
-    write_df(osdg_test_raw, "data/train_test/osdg_test_raw.tsv", index=True)
-    write_df(osdg_train_clean, "data/train_test/osdg_train_clean.tsv", index=True)
-    write_df(osdg_test_clean, "data/train_test/osdg_test_clean.tsv", index=True)
+    write_df(
+        osdg_train_raw,
+        os.path.join(base_path, "data/train_test/osdg_train_raw.tsv"),
+        index=True,
+    )
+    write_df(
+        osdg_test_raw,
+        os.path.join(base_path, "data/train_test/osdg_test_raw.tsv"),
+        index=True,
+    )
+    write_df(
+        osdg_train_clean,
+        os.path.join(base_path, "data/train_test/osdg_train_clean.tsv"),
+        index=True,
+    )
+    write_df(
+        osdg_test_clean,
+        os.path.join(base_path, "data/train_test/osdg_test_clean.tsv"),
+        index=True,
+    )
 
     """ Create and write out concatenated raw and clean files with original subset information """
     zora_train_raw.drop(columns=["author"], inplace=True)
@@ -268,22 +273,25 @@ def main():
 
     write_df(
         concat_train_raw,
-        "data/train_test/concat_train_raw.tsv",
+        os.path.join(base_path, "data/train_test/concat_train_raw.tsv"),
         index=False,
         na_rep="NA",
     )
     write_df(
-        concat_test_raw, "data/train_test/concat_test_raw.tsv", index=False, na_rep="NA"
+        concat_test_raw,
+        os.path.join(base_path, "data/train_test/concat_test_raw.tsv"),
+        index=False,
+        na_rep="NA",
     )
     write_df(
         concat_train_clean,
-        "data/train_test/concat_train_clean.tsv",
+        os.path.join(base_path, "data/train_test/concat_train_clean.tsv"),
         index=False,
         na_rep="NA",
     )
     write_df(
         concat_test_clean,
-        "data/train_test/concat_test_clean.tsv",
+        os.path.join(base_path, "data/train_test/concat_test_clean.tsv"),
         index=False,
         na_rep="NA",
     )
@@ -292,12 +300,12 @@ def main():
     # zora_dist_plot = plot_class_dists(
     #     "ZORA (401 items)", zora_train_raw, zora_test_raw, labels=range(1, 18)
     # )
-    # zora_dist_plot.savefig("data/dists/zora_class_dist.png")
+    # zora_dist_plot.savefig(os.path.join(base_path, "data/dists/zora_class_dist.png"))
 
     # osdg_dist_plot = plot_class_dists(
     #     "OSDG (26'069 items)", osdg_train_raw, osdg_test_raw, labels=range(1, 17)
     # )
-    # osdg_dist_plot.savefig("data/dists/osdg_class_dist.png")
+    # osdg_dist_plot.savefig(os.path.join(base_path, "data/dists/osdg_class_dist.png"))
 
     # concat_dist_plot = plot_class_dists(
     #     "ZORA + OSDG (26'470 items)",
@@ -305,7 +313,7 @@ def main():
     #     concat_test_raw,
     #     labels=range(1, 18),
     # )
-    # concat_dist_plot.savefig("data/dists/concat_class_dist.png")
+    # concat_dist_plot.savefig(os.path.join(base_path, "data/dists/concat_class_dist.png"))
 
 
 if __name__ == "__main__":

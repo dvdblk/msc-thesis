@@ -2,36 +2,15 @@ import os
 import pandas as pd
 import spacy
 from spacy.tokens import DocBin
-from typing import Optional
 
 from sklearn.model_selection import train_test_split
+from helpers import read_df
 
+spacy.cli.download("en_core_web_trf")
 
-def read_df(
-    filepath: str,
-    coltypes: dict,
-    keep_default_na: Optional[bool] = True,
-    skiprows: Optional[list[int]] = None,
-    new_names: Optional[list[str]] = None,
-    index_col: Optional[int] = None,
-) -> pd.DataFrame:
+base_path = os.path.join(os.path.dirname(__file__), "..")
 
-    df = pd.read_csv(
-        filepath,
-        keep_default_na=keep_default_na,
-        skiprows=skiprows,
-        names=new_names,
-        index_col=index_col,
-        sep="\t",
-        encoding="utf-8",
-    )
-
-    df = df.astype(coltypes)
-
-    return df
-
-
-doc_path = "data/spacy_docs"
+doc_path = os.path.join(base_path, "data/spacy_docs")
 if not os.path.exists(doc_path):
     os.makedirs(doc_path)
 
@@ -93,7 +72,7 @@ def main():
 
     # labels need to be strings for spaCy
     train_df = read_df(
-        f"data/train_test/{dataset}_train_raw.tsv",
+        os.path.join(base_path, f"data/train_test/{dataset}_train_raw.tsv"),
         coltypes={
             "sdg": "string",
             "faculty": "string",
@@ -104,7 +83,7 @@ def main():
         index_col=0,
     )
     test_df = read_df(
-        f"data/train_test/{dataset}_test_raw.tsv",
+        os.path.join(base_path, f"data/train_test/{dataset}_test_raw.tsv"),
         coltypes={
             "sdg": "string",
             "faculty": "string",
@@ -150,12 +129,12 @@ def main():
 
     # labels need to be strings for spaCy
     train_df = read_df(
-        f"data/train_test/{dataset}_train_raw.tsv",
+        os.path.join(base_path, f"data/train_test/{dataset}_train_raw.tsv"),
         coltypes={"sdg": "string", "abstract": "string"},
         index_col=0,
     )
     test_df = read_df(
-        f"data/train_test/{dataset}_test_raw.tsv",
+        os.path.join(base_path, f"data/train_test/{dataset}_test_raw.tsv"),
         coltypes={"sdg": "string", "abstract": "string"},
         index_col=0,
     )
@@ -191,7 +170,7 @@ def main():
 
     # labels need to be strings for spaCy
     train_df = read_df(
-        f"data/train_test/{dataset}_train_raw.tsv",
+        os.path.join(base_path, f"data/train_test/{dataset}_train_raw.tsv"),
         coltypes={
             "sdg": "string",
             "faculty": "string",
@@ -200,7 +179,7 @@ def main():
         },
     )
     test_df = read_df(
-        f"data/train_test/{dataset}_test_raw.tsv",
+        os.path.join(base_path, f"data/train_test/{dataset}_test_raw.tsv"),
         coltypes={
             "sdg": "string",
             "faculty": "string",
