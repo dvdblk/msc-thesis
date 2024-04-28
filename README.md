@@ -8,6 +8,7 @@
 ## Experiments
 
 * `01-scibert` = reproduced models from jroady thesis (including transformers and not only SpaCy)
+* `02-llama` = xai on ft llama models
 
 ### Misc.
 

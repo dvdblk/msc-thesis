@@ -7,3 +7,8 @@ ipykernel
 langdetect
 matplotlib
 nltk
+peft
+bitsandbytes
+accelerate
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch
