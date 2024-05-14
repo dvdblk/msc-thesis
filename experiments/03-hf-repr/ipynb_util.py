@@ -2,7 +2,7 @@ import os
 
 # needs to be executed before importing torch or transformers
 # server specific: only use last 3 gpus (on rattle.ifi.uzh.ch)
-os.environ["CUDA_VISIBLE_DEVICES"] = "3,4,5,6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "2,3,4"
 # set the home directory for huggingface transformers (where the models are saved)
 # by default this is '~/.cache/huggingface/hub'
 # see https://stackoverflow.com/questions/61798573/where-does-hugging-faces-transformers-save-models
