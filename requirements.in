@@ -9,6 +9,7 @@ peft
 bitsandbytes
 accelerate
 datasets
+lxt
 ipywidgets
 python-dotenv
 --extra-index-url https://download.pytorch.org/whl/cu118
