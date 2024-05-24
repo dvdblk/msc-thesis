@@ -3,5 +3,8 @@
 
 **/data/**
 **/models/**
+**/checkpoints/**
 
 venv/
+
+.env
