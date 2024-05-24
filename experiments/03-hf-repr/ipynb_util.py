@@ -3,6 +3,7 @@ import os
 # needs to be executed before importing torch or transformers
 # server specific: only use last 3 gpus (on rattle.ifi.uzh.ch)
 # os.environ["CUDA_VISIBLE_DEVICES"] = "2,3,4"
+
 # set the home directory for huggingface transformers (where the models are saved)
 # by default this is '~/.cache/huggingface/hub'
 # see https://stackoverflow.com/questions/61798573/where-does-hugging-faces-transformers-save-models
@@ -27,9 +28,9 @@ if not torch.cuda.is_available():
 # path of the directory containing this file
 BASE_DIR_PATH = Path.cwd().parent
 # path of the data directory
-DATA_DIR_PATH = BASE_DIR_PATH / "data" / "swisstext-2024-sharedtask"
+DATA_DIR_PATH = BASE_DIR_PATH / "data"
 
-CHECKPOINT_PATH = (os.getenv("HF_HOME") or "..") + "/checkpoints"
+CHECKPOINT_PATH = (os.getenv("HF_HOME") or "~/.cache/huggingface") + "/checkpoints"
 
 SEED = 1337
 set_seed(SEED)
