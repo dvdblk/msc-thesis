@@ -3,7 +3,8 @@
 ## Quickstart
 
 1. Install `venv`: `python -m venv venv && source venv/bin/activate && pip install -r requirements.txt`
-2. Install `cupy` for a [correct CUDA version](https://docs.cupy.dev/en/stable/install.html#requirements): e.g. `pip install cupy-cuda12x==12.3.0`
+2. (Optional step) Install `cupy` for a [correct CUDA version](https://docs.cupy.dev/en/stable/install.html#requirements): e.g. `pip install cupy-cuda12x==12.3.0`
+3. `xelatex` for AttnLRP: `conda install -c conda-forge texlive-core`
 
 ## Experiments
 

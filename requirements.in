@@ -8,8 +8,11 @@ nltk
 peft
 bitsandbytes
 accelerate
+evaluate
+sentencepiece
 datasets
 lxt
+wandb
 ipywidgets
 python-dotenv
 --extra-index-url https://download.pytorch.org/whl/cu118

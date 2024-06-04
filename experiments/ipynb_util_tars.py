@@ -21,6 +21,7 @@ import torch
 import numpy as np
 from pathlib import Path
 from transformers import set_seed
+from dotenv import load_dotenv
 
 # increase the number of elements printed in the tensor
 torch.set_printoptions(threshold=10_000)
@@ -49,3 +50,7 @@ CHECKPOINT_PATH = (
 # set the seed for reproducibility
 SEED = 1337
 set_seed(SEED)
+
+# Load .env file in the root of the repo
+load_dotenv(BASE_DIR_PATH.parent / ".env")
+HF_TOKEN = os.getenv("HF_TOKEN")
