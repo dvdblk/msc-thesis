@@ -17,6 +17,8 @@ aiohttp==3.9.5
     #   fsspec
 aiosignal==1.3.1
     # via aiohttp
+annotated-types==0.7.0
+    # via pydantic
 asttokens==2.4.1
     # via stack-data
 attrs==23.2.0
@@ -25,6 +27,18 @@ bitsandbytes==0.43.1
     # via
     #   -r requirements.in
     #   lxt
+blis==0.7.11
+    # via thinc
+captum==0.7.0
+    # via
+    #   ferret-xai
+    #   inseq
+    #   thermostat-datasets
+catalogue==2.0.10
+    # via
+    #   spacy
+    #   srsly
+    #   thinc
 certifi==2024.6.2
     # via
     #   requests
@@ -34,21 +48,35 @@ charset-normalizer==3.3.2
 click==8.1.7
     # via
     #   nltk
+    #   typer
     #   wandb
+cloudpathlib==0.18.1
+    # via weasel
 cloudpickle==3.0.0
     # via shap
 comm==0.2.2
     # via
     #   ipykernel
     #   ipywidgets
+confection==0.1.5
+    # via
+    #   thinc
+    #   weasel
 contourpy==1.2.1
     # via matplotlib
 cycler==0.12.1
     # via matplotlib
+cymem==2.0.8
+    # via
+    #   preshed
+    #   spacy
+    #   thinc
 datasets==2.19.2
     # via
     #   -r requirements.in
     #   evaluate
+    #   ferret-xai
+    #   thermostat-datasets
 debugpy==1.8.1
     # via ipykernel
 decorator==5.1.1
@@ -64,6 +92,8 @@ evaluate==0.4.2
     # via -r requirements.in
 executing==2.0.1
     # via stack-data
+ferret-xai==0.4.1
+    # via -r requirements.in
 filelock==3.14.0
     # via
     #   datasets
@@ -99,22 +129,37 @@ idna==3.7
     # via
     #   requests
     #   yarl
-ipykernel==6.29.4
+imageio==2.34.1
+    # via scikit-image
+inseq[notebook]==0.6.0
     # via -r requirements.in
+ipykernel==6.29.4
+    # via
+    #   -r requirements.in
+    #   inseq
 ipython==8.25.0
     # via
     #   ipykernel
     #   ipywidgets
 ipywidgets==8.1.3
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   inseq
+jaxtyping==0.2.29
+    # via inseq
 jedi==0.19.1
     # via ipython
 jinja2==3.1.4
-    # via torch
+    # via
+    #   spacy
+    #   torch
 joblib==1.4.2
     # via
+    #   ferret-xai
     #   nltk
     #   scikit-learn
+jsonnet==0.20.0
+    # via thermostat-datasets
 jupyter-client==8.6.2
     # via ipykernel
 jupyter-core==5.7.2
@@ -125,22 +170,41 @@ jupyterlab-widgets==3.0.11
     # via ipywidgets
 kiwisolver==1.4.5
     # via matplotlib
+langcodes==3.4.0
+    # via spacy
 langdetect==1.0.9
     # via -r requirements.in
+language-data==1.2.0
+    # via langcodes
+lazy-loader==0.4
+    # via scikit-image
+lime==0.2.0.1
+    # via ferret-xai
 llvmlite==0.42.0
     # via numba
 lxt==0.5.2
     # via -r requirements.in
+marisa-trie==1.1.1
+    # via language-data
+markdown-it-py==3.0.0
+    # via rich
 markupsafe==2.1.5
     # via jinja2
 matplotlib==3.9.0
     # via
     #   -r requirements.in
+    #   captum
+    #   ferret-xai
+    #   inseq
+    #   lime
     #   lxt
+    #   seaborn
 matplotlib-inline==0.1.7
     # via
     #   ipykernel
     #   ipython
+mdurl==0.1.2
+    # via markdown-it-py
 mpmath==1.3.0
     # via sympy
 multidict==6.0.5
@@ -151,10 +215,17 @@ multiprocess==0.70.16
     # via
     #   datasets
     #   evaluate
+murmurhash==1.0.10
+    # via
+    #   preshed
+    #   spacy
+    #   thinc
 nest-asyncio==1.6.0
     # via ipykernel
 networkx==3.3
-    # via torch
+    # via
+    #   scikit-image
+    #   torch
 nltk==3.8.1
     # via -r requirements.in
 numba==0.59.1
@@ -163,17 +234,30 @@ numpy==1.26.4
     # via
     #   accelerate
     #   bitsandbytes
+    #   blis
+    #   captum
     #   contourpy
     #   datasets
     #   evaluate
+    #   ferret-xai
+    #   imageio
+    #   inseq
+    #   lime
     #   matplotlib
     #   numba
+    #   opencv-python
     #   pandas
     #   peft
     #   pyarrow
+    #   scikit-image
     #   scikit-learn
     #   scipy
+    #   seaborn
     #   shap
+    #   spacy
+    #   thermostat-datasets
+    #   thinc
+    #   tifffile
     #   transformers
 nvidia-cublas-cu11==11.11.3.6
     # via
@@ -200,6 +284,10 @@ nvidia-nccl-cu11==2.20.5
     # via torch
 nvidia-nvtx-cu11==11.8.86
     # via torch
+opencv-python==4.10.0.82
+    # via ferret-xai
+overrides==7.7.0
+    # via thermostat-datasets
 packaging==24.0
     # via
     #   accelerate
@@ -207,16 +295,25 @@ packaging==24.0
     #   evaluate
     #   huggingface-hub
     #   ipykernel
+    #   lazy-loader
     #   matplotlib
     #   peft
+    #   pytorch-ignite
+    #   scikit-image
     #   shap
+    #   spacy
+    #   thinc
     #   transformers
+    #   weasel
 pandas==2.2.2
     # via
     #   -r requirements.in
     #   datasets
     #   evaluate
+    #   ferret-xai
+    #   seaborn
     #   shap
+    #   thermostat-datasets
 parso==0.8.4
     # via jedi
 peft==0.11.1
@@ -224,15 +321,26 @@ peft==0.11.1
 pexpect==4.9.0
     # via ipython
 pillow==10.3.0
-    # via matplotlib
+    # via
+    #   imageio
+    #   matplotlib
+    #   scikit-image
 platformdirs==4.2.2
     # via
     #   jupyter-core
     #   wandb
-prompt-toolkit==3.0.45
+preshed==3.0.9
+    # via
+    #   spacy
+    #   thinc
+prompt-toolkit==3.0.46
     # via ipython
 protobuf==4.25.3
-    # via wandb
+    # via
+    #   inseq
+    #   thermostat-datasets
+    #   transformers
+    #   wandb
 psutil==5.9.8
     # via
     #   accelerate
@@ -247,8 +355,18 @@ pyarrow==16.1.0
     # via datasets
 pyarrow-hotfix==0.6
     # via datasets
+pydantic==2.7.3
+    # via
+    #   confection
+    #   spacy
+    #   thinc
+    #   weasel
+pydantic-core==2.18.4
+    # via pydantic
 pygments==2.18.0
-    # via ipython
+    # via
+    #   ipython
+    #   rich
 pyparsing==3.1.2
     # via matplotlib
 python-dateutil==2.9.0.post0
@@ -258,6 +376,10 @@ python-dateutil==2.9.0.post0
     #   pandas
 python-dotenv==1.0.1
     # via -r requirements.in
+pytorch-ignite==0.5.0.post2
+    # via thermostat-datasets
+pytreebank==0.2.7
+    # via ferret-xai
 pytz==2024.1
     # via pandas
 pyyaml==6.0.1
@@ -281,27 +403,53 @@ requests==2.32.3
     #   datasets
     #   evaluate
     #   huggingface-hub
+    #   spacy
     #   transformers
     #   wandb
+    #   weasel
+rich==13.7.1
+    # via
+    #   inseq
+    #   typer
 safetensors==0.4.3
     # via
     #   accelerate
     #   peft
     #   transformers
+scikit-image==0.23.2
+    # via
+    #   ferret-xai
+    #   lime
 scikit-learn==1.5.0
-    # via shap
+    # via
+    #   lime
+    #   shap
+    #   thermostat-datasets
 scipy==1.13.1
     # via
+    #   lime
+    #   scikit-image
     #   scikit-learn
     #   shap
+    #   thermostat-datasets
+seaborn==0.13.2
+    # via ferret-xai
 sentencepiece==0.2.0
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   ferret-xai
+    #   thermostat-datasets
+    #   transformers
 sentry-sdk==2.4.0
     # via wandb
 setproctitle==1.3.3
     # via wandb
 shap==0.45.0
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   ferret-xai
+shellingham==1.5.4
+    # via typer
 six==1.16.0
     # via
     #   asttokens
@@ -310,37 +458,67 @@ six==1.16.0
     #   python-dateutil
 slicer==0.0.7
     # via shap
+smart-open==7.0.4
+    # via weasel
 smmap==5.0.1
     # via gitdb
+spacy==3.7.5
+    # via thermostat-datasets
+spacy-legacy==3.0.12
+    # via spacy
+spacy-loggers==1.0.5
+    # via spacy
+srsly==2.4.8
+    # via
+    #   confection
+    #   spacy
+    #   thinc
+    #   weasel
 stack-data==0.6.3
     # via ipython
 sympy==1.12.1
     # via torch
 tabulate==0.9.0
     # via lxt
+thermostat-datasets==1.1.0
+    # via ferret-xai
+thinc==8.2.4
+    # via spacy
 threadpoolctl==3.5.0
     # via scikit-learn
+tifffile==2024.5.22
+    # via scikit-image
 tokenizers==0.19.1
     # via transformers
-torch==2.3.0+cu118
+torch==2.3.1+cu118
     # via
     #   -r requirements.in
     #   accelerate
     #   bitsandbytes
+    #   captum
+    #   inseq
     #   lxt
     #   peft
+    #   pytorch-ignite
+    #   thermostat-datasets
 tornado==6.4
     # via
     #   ipykernel
     #   jupyter-client
 tqdm==4.66.4
     # via
+    #   captum
     #   datasets
     #   evaluate
+    #   ferret-xai
     #   huggingface-hub
+    #   inseq
+    #   lime
     #   nltk
     #   peft
     #   shap
+    #   spacy
+    #   thermostat-datasets
     #   transformers
 traitlets==5.14.3
     # via
@@ -351,18 +529,32 @@ traitlets==5.14.3
     #   jupyter-client
     #   jupyter-core
     #   matplotlib-inline
-transformers==4.41.2
+transformers[sentencepiece,tokenizers]==4.41.2
     # via
     #   -r requirements.in
+    #   ferret-xai
+    #   inseq
     #   lxt
     #   peft
-triton==2.3.0
+    #   thermostat-datasets
+triton==2.3.1
     # via torch
+typeguard==2.13.3
+    # via
+    #   inseq
+    #   jaxtyping
+typer==0.12.3
+    # via
+    #   spacy
+    #   weasel
 typing-extensions==4.12.1
     # via
     #   huggingface-hub
     #   ipython
+    #   pydantic
+    #   pydantic-core
     #   torch
+    #   typer
 tzdata==2024.1
     # via pandas
 urllib3==2.2.1
@@ -371,10 +563,19 @@ urllib3==2.2.1
     #   sentry-sdk
 wandb==0.17.0
     # via -r requirements.in
+wasabi==1.1.3
+    # via
+    #   spacy
+    #   thinc
+    #   weasel
 wcwidth==0.2.13
     # via prompt-toolkit
+weasel==0.4.1
+    # via spacy
 widgetsnbextension==4.0.11
     # via ipywidgets
+wrapt==1.16.0
+    # via smart-open
 xxhash==3.4.1
     # via
     #   datasets
