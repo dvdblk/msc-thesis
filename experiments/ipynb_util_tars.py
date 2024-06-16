@@ -9,7 +9,7 @@ import os
 
 # needs to be executed before importing torch or transformers
 # server specific: 6, 7 on tars (48GB VRAM on 3090)
-os.environ["CUDA_VISIBLE_DEVICES"] = "1,2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3,4,5"
 
 # set the home directory for huggingface transformers (where the models are saved)
 # by default this is '~/.cache/huggingface/hub'
