@@ -1,0 +1,21 @@
+shap==0.45.0
+transformers==4.34.1
+pandas
+ipykernel
+langdetect
+matplotlib
+nltk
+peft
+bitsandbytes
+accelerate
+evaluate
+sentencepiece
+datasets
+lxt
+wandb
+inseq[notebook]
+ferret-xai
+ipywidgets
+python-dotenv
+--extra-index-url https://download.pytorch.org/whl/cu118
+torch
