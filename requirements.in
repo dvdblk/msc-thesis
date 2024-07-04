@@ -17,5 +17,7 @@ inseq[notebook]
 ferret-xai
 ipywidgets
 python-dotenv
+structlog
+qdrant-client
 --extra-index-url https://download.pytorch.org/whl/cu118
 torch
