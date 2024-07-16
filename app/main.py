@@ -2,6 +2,7 @@ import argparse
 import time
 import os
 import sys
+import traceback
 
 import torch
 import torch.multiprocessing as mp
@@ -67,10 +68,8 @@ __model_family_map = {
 
 def setup_model_and_tokenizer(args):
     # FIXME: move somewhere
-    # fmt: off
-    label2id={"1":0,"10":1,"11":2,"12":3,"13":4,"14":5,"15":6,"16":7,"17":8,"2":9,"3":10,"4":11,"5":12,"6":13,"7":14,"8":15,"9":16,}
-    id2label={0:"1",1:"10",2:"11",3:"12",4:"13",5:"14",6:"15",7:"16",8:"17",9:"2",10:"3",11:"4",12:"5",13:"6",14:"7",15:"8",16:"9",}
-    # fmt: on
+    id2label = {i: str(i + 1) for i in range(17)}
+    label2id = {str(i + 1): i for i in range(17)}
 
     # Load model
     # FIXME: add model loading logic based on args
@@ -117,13 +116,35 @@ def process_abstract(abstract, model, tokenizer, device):
     ).to(device)
     with torch.no_grad():
         outputs = model(**inputs)
+    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+    # get the predicted id
+    predicted_id = torch.argmax(probs, dim=-1).item()
     prediction = torch.argmax(outputs.logits, dim=1).item()
+    assert predicted_id == prediction
+
+    # reorder probs to match the order of the labels
+    sorted_labels = sorted(model.config.id2label.items(), key=lambda x: int(x[1]))
+    # create permutation tensor based on label order
+    probs_permutation = torch.tensor([label_index for label_index, _ in sorted_labels])
+    probs = probs.squeeze()[probs_permutation]
+    # need to add +1 because the labels are 0-indexed
+    predicted_label = torch.argmax(probs).item() + 1
+
+    # apply probs_permutation on shap_values in the last dimension
+
+    log.info(shap_values)
+    log.info(shap_values.shape)
+    exit()
 
     # return (prediction, xai_values)
-    return prediction, {
-        "shap_values": shap_values.values[0].tolist(),
-        "base_values": shap_values.base_values[0].tolist(),
+    xai_values = {
+        "token_scores": shap_values.values[0].tolist(),
+        # "base_values": shap_values.base_values[0].tolist(),
+        "input_tokens": shap_values.data[0].tolist(),
     }
+    assert len(xai_values["token_scores"]) == len(xai_values["input_tokens"])
+
+    return predicted_label, probs.tolist(), xai_values
 
 
 def worker_function(task_queue, result_queue, model, tokenizer, args):
@@ -162,13 +183,15 @@ def worker_function(task_queue, result_queue, model, tokenizer, args):
                         "xai_method": args.method,
                         "model_family": args.model_family,
                         "model_path": args.model_path,
-                        "prediction": result[0],
-                        "xai_values": result[1],
+                        "predicted_label": result[0],
+                        "probs": result[1],
+                        "xai_values": result[2],
                     }
                 )
                 result_queue.put((publication_id, point_id, existing_xai))
             except Exception as e:
                 log.error(f"Error processing abstract {publication_id}: {str(e)}")
+                log.error(traceback.format_exc())
                 result_queue.put((publication_id, point_id, None))
 
 
@@ -186,7 +209,7 @@ def main(args):
 
     # Set up multiprocessing
     num_gpus = torch.cuda.device_count()
-    num_workers = num_gpus * 5  # workers per gpu
+    num_workers = num_gpus * args.n_workers  # workers per gpu
     # Note: takes a while because of "spawn", but it is required to share the same model across processes
     mp.set_start_method("spawn", force=True)
 
@@ -203,8 +226,8 @@ def main(args):
         offset = 0
         total_processed = 0
         total_queued = 0
-        batch_size = 25
-        n_publications = 20_000
+        batch_size = 4
+        n_publications = args.n_publications
         queue_low_water_mark = num_workers
         queue_high_water_mark = num_workers * 2
 
@@ -247,20 +270,63 @@ def main(args):
                 )
             return True
 
+        def queue_publications_with_label():
+            nonlocal offset, total_queued
+            while task_queue.qsize() * batch_size < queue_high_water_mark:
+                publications = client.scroll(
+                    collection_name="publications",
+                    limit=batch_size,
+                    offset=offset,
+                    # skips already processed publications with this method, model family and path
+                    scroll_filter=models.Filter(
+                        must_not=[
+                            models.IsNullCondition(
+                                is_null=models.PayloadField(key="labels")
+                            ),
+                            # models.FieldCondition(
+                            #     key="xai[].xai_method",
+                            #     match=models.MatchValue(value=args.method),
+                            # ),
+                            # models.FieldCondition(
+                            #     key="xai[].model_family",
+                            #     match=models.MatchValue(value=args.model_family),
+                            # ),
+                            # models.FieldCondition(
+                            #     key="xai[].model_path",
+                            #     match=models.MatchValue(value=args.model_path),
+                            # ),
+                        ]
+                    ),
+                    with_payload=["description", "id", "title", "xai"],
+                )
+                if not publications[0]:
+                    return False
+                n_pubs = len(publications[0])
+                task_queue.put(publications[0])
+                offset += n_pubs
+                total_queued += n_pubs
+                log.debug(
+                    "Queued more publications",
+                    n_added=n_pubs,
+                    total_queued=total_queued,
+                )
+            return True
+
         log.info("Starting to process abstracts")
         # sleep for a short while to avoid tqdm output bug
         time.sleep(1)
+        queue_publications_with_label()
 
         with tqdm(total=n_publications, file=sys.stdout) as pbar:
             while total_processed < n_publications and (
                 total_processed < total_queued or total_queued < n_publications
             ):
-                # Check if we need to queue more publications
-                if task_queue.qsize() * batch_size <= queue_low_water_mark:
-                    if not queue_publications():
-                        # No more publications to queue
-                        if task_queue.empty() and total_processed > 0:
-                            break
+                # # Check if we need to queue more publications
+                # if task_queue.qsize() * batch_size <= queue_low_water_mark:
+                #     if not queue_publications_with_label():
+                #         # No more publications to queue
+                #         if task_queue.empty() and total_processed > 0:
+                #             break
 
                 try:
                     result = result_queue.get(timeout=10)
@@ -324,6 +390,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-path",
         help="Checkpoint path to the model to explain, otherwise uses the default model of the family.",
+    )
+    parser.add_argument(
+        "--n-workers",
+        help="Number of workers PER GPU to use for parallel processing (computation of XAI values).",
+        type=int,
+        default=1,
+    )
+    parser.add_argument(
+        "--n-publications",
+        help="Limit of publications to process in total.",
+        type=int,
+        default=100,
     )
     # FIXME: Add publication retrieval method (e.g. qdrant vs dataset)
     # parser.add_argument("--pub-retrieval-method", help="Method to retrieve publications.")
