@@ -122,19 +122,7 @@ def process_abstract(abstract, model, tokenizer, device):
     prediction = torch.argmax(outputs.logits, dim=1).item()
     assert predicted_id == prediction
 
-    # reorder probs to match the order of the labels
-    sorted_labels = sorted(model.config.id2label.items(), key=lambda x: int(x[1]))
-    # create permutation tensor based on label order
-    probs_permutation = torch.tensor([label_index for label_index, _ in sorted_labels])
-    probs = probs.squeeze()[probs_permutation]
-    # need to add +1 because the labels are 0-indexed
-    predicted_label = torch.argmax(probs).item() + 1
-
-    # apply probs_permutation on shap_values in the last dimension
-
-    log.info(shap_values)
-    log.info(shap_values.shape)
-    exit()
+    predicted_label = model.config.id2label[torch.argmax(probs).item()]
 
     # return (prediction, xai_values)
     xai_values = {
@@ -226,7 +214,7 @@ def main(args):
         offset = 0
         total_processed = 0
         total_queued = 0
-        batch_size = 4
+        batch_size = 500
         n_publications = args.n_publications
         queue_low_water_mark = num_workers
         queue_high_water_mark = num_workers * 2
