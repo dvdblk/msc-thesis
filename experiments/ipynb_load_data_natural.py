@@ -102,7 +102,7 @@ print(id2label[16], label2id[id2label[16]], label2id["9"])
 from transformers import AutoTokenizer
 
 # whether the text should be lowered or not
-SHOULD_LOWER = True
+SHOULD_LOWER = False
 
 
 def preprocess_data(
