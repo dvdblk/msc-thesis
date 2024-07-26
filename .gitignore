@@ -12,4 +12,5 @@ venv**/*
 
 .env
 
-*.tex
+**/*.tex
+**/*.pdf
