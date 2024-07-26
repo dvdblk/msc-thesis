@@ -8,151 +8,47 @@ import torch
 import torch.multiprocessing as mp
 
 import structlog
-from dotenv import load_dotenv
-import shap
-from shap import PartitionExplainer, Explainer
-from shap.maskers import Text as TextMasker
-from qdrant_client import QdrantClient, models
+from qdrant_client import models
 from tqdm import tqdm
-from tqdm.asyncio import tqdm as tqdm_asyncio
-import logging
-import transformers
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 from queue import Empty as QueueEmptyException
-
-load_dotenv()
-
-
-class TqdmLoggingHandler(logging.Handler):
-    def __init__(self, level=logging.NOTSET):
-        super().__init__(level)
-
-    def emit(self, record):
-        try:
-            msg = self.format(record)
-            tqdm.write(msg)
-            self.flush()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            self.handleError(record)
-
-
-def configure_structlog():
-    structlog.configure(
-        logger_factory=structlog.stdlib.LoggerFactory(),
-        wrapper_class=structlog.stdlib.BoundLogger,
-        cache_logger_on_first_use=True,
-    )
-
-    logging.basicConfig(
-        format="%(message)s", level=logging.INFO, handlers=[TqdmLoggingHandler()]
-    )
-    # ignore INFO messages from httpx / qdrant
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("qdrant_client").setLevel(logging.WARNING)
-    logging.getLogger("shap").setLevel(logging.WARNING)
-
+from app.utils import configure_structlog, setup_qdrant_client
+from app.models import setup_model_and_tokenizer, get_model_names_list
+from app.explainers import (
+    get_xai_method_names_list,
+    process_abstract,
+    get_explainer,
+    ExplainerMethod,
+)
 
 configure_structlog()
 log = structlog.get_logger()
 
-__methods_map = {"shap": PartitionExplainer, "tfidf-shap": None, "attnlrp": None}
-__model_family_map = {
-    "llama": None,
-    "unllama": None,  # unmasked llama
-    "scibert": None,
-}
-
-
-def setup_model_and_tokenizer(args):
-    # FIXME: move somewhere
-    id2label = {i: str(i + 1) for i in range(17)}
-    label2id = {str(i + 1): i for i in range(17)}
-
-    # Load model
-    # FIXME: add model loading logic based on args
-    model = AutoModelForSequenceClassification.from_pretrained(
-        args.model_path or __model_family_map[args.model_family],
-        num_labels=17,
-        id2label=id2label,
-        label2id=label2id,
-    )
-    model.eval()
-    model.share_memory()
-    tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-
-    return model, tokenizer
-
-
-def process_abstract(abstract, model, tokenizer, device):
-    def predictor(texts):
-        inputs = tokenizer(
-            texts.tolist(),
-            padding=True,
-            truncation=True,
-            max_length=512,
-            return_tensors="pt",
-        ).to(device)
-        with torch.no_grad():
-            outputs = model(**inputs)
-        logits = outputs.logits.cpu()
-
-        # softmax
-        probs = torch.exp(logits) / torch.exp(logits).sum(-1, keepdims=True)
-        return probs
-
-    # get partition shap explanations
-    explainer = Explainer(
-        predictor, algorithm="partition", masker=TextMasker(tokenizer), silent=True
-    )
-    shap_values = explainer([abstract])
-
-    # get prediction
-    # (we can also get this by summing base_values with shap_values but this is more explicit)
-    inputs = tokenizer(
-        [abstract], padding=True, truncation=True, max_length=512, return_tensors="pt"
-    ).to(device)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    # get the predicted id
-    predicted_id = torch.argmax(probs, dim=-1).item()
-    prediction = torch.argmax(outputs.logits, dim=1).item()
-    assert predicted_id == prediction
-
-    predicted_label = model.config.id2label[torch.argmax(probs).item()]
-
-    # return (prediction, xai_values)
-    xai_values = {
-        "token_scores": shap_values.values[0].tolist(),
-        # "base_values": shap_values.base_values[0].tolist(),
-        "input_tokens": shap_values.data[0].tolist(),
-    }
-    assert len(xai_values["token_scores"]) == len(xai_values["input_tokens"])
-
-    return predicted_label, probs.tolist(), xai_values
-
 
 def worker_function(task_queue, result_queue, model, tokenizer, args):
     worker_id = torch.multiprocessing.current_process()._identity[0] - 1
-    visible_devices_str = os.getenv(
-        "CUDA_VISIBLE_DEVICES", ",".join(map(str, range(torch.cuda.device_count())))
-    )
-    visible_devices = [int(x) for x in visible_devices_str.split(",")]
+
+    torch.cuda.init()
+    visible_devices_str = os.getenv("CUDA_VISIBLE_DEVICES")
+    if visible_devices_str is not None:
+        visible_devices = [int(x) for x in visible_devices_str.split(",")]
+    else:
+        visible_devices = list(range(torch.cuda.device_count()))
 
     num_gpus = len(visible_devices)
     gpu_id = worker_id % num_gpus
-    device = torch.device(f"cuda:{visible_devices[gpu_id]}")
-    log = structlog.get_logger().bind(worker_id=worker_id, gpu_id=gpu_id)
+    real_gpu_id = visible_devices[gpu_id]
+    device = torch.device(f"cuda:{gpu_id}")
+    log = structlog.get_logger().bind(worker_id=worker_id, real_gpu_id=real_gpu_id)
     model = model.to(device)
+    explainer = get_explainer(args.method, model, tokenizer, device, args)
     log.info("Setting up worker", device=device)
 
     while True:
         publications = task_queue.get()
         if publications is None:  # This is our signal that no more data is coming
             break
+        log.debug("Got publications", n_publications=len(publications))
 
         for publication in publications:
             abstract = publication.payload.get("description", "")
@@ -163,20 +59,30 @@ def worker_function(task_queue, result_queue, model, tokenizer, args):
 
             preprocessed_abstract = title + " " + abstract
             try:
-                result = process_abstract(
-                    preprocessed_abstract, model, tokenizer, device
+                predicted_label, probs, xai_values = process_abstract(
+                    preprocessed_abstract, explainer, model, tokenizer, device
                 )
+
+                # TODO: add postprocessing here e.g. for tokens etc
+                if ExplainerMethod(args.method) == ExplainerMethod.ATTNLRP:
+                    # replace "[CLS]" and "[SEP]" tokens with empty string
+                    if xai_values["input_tokens"][0] == "[CLS]":
+                        xai_values["input_tokens"][0] = ""
+                    if xai_values["input_tokens"][-1] == "[SEP]":
+                        xai_values["input_tokens"][-1] = ""
+
                 existing_xai.append(
                     {
                         "xai_method": args.method,
                         "model_family": args.model_family,
                         "model_path": args.model_path,
-                        "predicted_label": result[0],
-                        "probs": result[1],
-                        "xai_values": result[2],
+                        "predicted_label": predicted_label,
+                        "probs": probs,
+                        "xai_values": xai_values,
                     }
                 )
                 result_queue.put((publication_id, point_id, existing_xai))
+                log.debug("Processed abstract", publication_id=publication_id)
             except Exception as e:
                 log.error(f"Error processing abstract {publication_id}: {str(e)}")
                 log.error(traceback.format_exc())
@@ -186,14 +92,11 @@ def worker_function(task_queue, result_queue, model, tokenizer, args):
 def main(args):
 
     model, tokenizer = setup_model_and_tokenizer(args)
+    log.info("Loaded model and tokenizer")
 
     # Connect to Qdrant
-    client = QdrantClient(
-        os.getenv("QDRANT_API_URL"),
-        port=os.getenv("QDRANT_API_PORT"),
-        api_key=os.getenv("QDRANT_API_KEY"),
-    )
-    log.info("Loaded model, tokenizer and connected to Qdrant")
+    client = setup_qdrant_client()
+    log.info("Qdrant connection set up.")
 
     # Set up multiprocessing
     num_gpus = torch.cuda.device_count()
@@ -260,6 +163,8 @@ def main(args):
 
         def queue_publications_with_label():
             nonlocal offset, total_queued
+            chunk_size = 20
+
             while task_queue.qsize() * batch_size < queue_high_water_mark:
                 publications = client.scroll(
                     collection_name="publications",
@@ -270,27 +175,19 @@ def main(args):
                         must_not=[
                             models.IsNullCondition(
                                 is_null=models.PayloadField(key="labels")
-                            ),
-                            # models.FieldCondition(
-                            #     key="xai[].xai_method",
-                            #     match=models.MatchValue(value=args.method),
-                            # ),
-                            # models.FieldCondition(
-                            #     key="xai[].model_family",
-                            #     match=models.MatchValue(value=args.model_family),
-                            # ),
-                            # models.FieldCondition(
-                            #     key="xai[].model_path",
-                            #     match=models.MatchValue(value=args.model_path),
-                            # ),
+                            )
                         ]
                     ),
                     with_payload=["description", "id", "title", "xai"],
                 )
                 if not publications[0]:
                     return False
+
+                for i in range(0, len(publications[0]), chunk_size):
+                    chunk = publications[0][i : i + chunk_size]
+                    task_queue.put(chunk)
+
                 n_pubs = len(publications[0])
-                task_queue.put(publications[0])
                 offset += n_pubs
                 total_queued += n_pubs
                 log.debug(
@@ -302,10 +199,12 @@ def main(args):
 
         log.info("Starting to process abstracts")
         # sleep for a short while to avoid tqdm output bug
-        time.sleep(1)
+        time.sleep(5)
         queue_publications_with_label()
 
-        with tqdm(total=n_publications, file=sys.stdout) as pbar:
+        with tqdm(
+            total=n_publications, file=sys.stdout, position=0, leave=True
+        ) as pbar:
             while total_processed < n_publications and (
                 total_processed < total_queued or total_queued < n_publications
             ):
@@ -317,7 +216,7 @@ def main(args):
                 #             break
 
                 try:
-                    result = result_queue.get(timeout=10)
+                    result = result_queue.get(timeout=60)
                     if result is not None:
                         publication_id, point_id, new_xai_field = result
                         if new_xai_field is not None:
@@ -366,18 +265,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--method",
         help="Explainer method to use e.g. 'shap' for parition shap.",
-        choices=__methods_map.keys(),
+        choices=get_xai_method_names_list(),
         required=True,
     )
     parser.add_argument(
         "--model-family",
         help="The model family to use.",
-        choices=__model_family_map.keys(),
+        choices=get_model_names_list(),
         required=True,
     )
     parser.add_argument(
         "--model-path",
         help="Checkpoint path to the model to explain, otherwise uses the default model of the family.",
+        required=True,
     )
     parser.add_argument(
         "--n-workers",
@@ -391,10 +291,23 @@ if __name__ == "__main__":
         type=int,
         default=100,
     )
+
+    parser.add_argument(
+        "--tfidf-corpus-path",
+        help="Path to the corpus for TF-IDF vectorizer in SHAP Partition TF-IDF",
+        required=False,
+    )
+
     # FIXME: Add publication retrieval method (e.g. qdrant vs dataset)
     # parser.add_argument("--pub-retrieval-method", help="Method to retrieve publications.")
     parser.add_argument("-o", "--output-path", help="Path to save the explanations.")
     args = parser.parse_args()
+
+    # Validate args
+    if args.method == "shap-partition-tfidf" and not args.tfidf_corpus_path:
+        parser.error(
+            "The --tfidf-corpus-path argument is required for the 'shap-partition-tfidf' method"
+        )
 
     log.info(f"Starting explainer", method=args.method, model_family=args.model_family)
     main(args)

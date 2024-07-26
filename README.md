@@ -10,7 +10,7 @@
 
 * `01-scibert` = reproduced models from jroady thesis (including transformers and not only SpaCy)
 * `02-llama` = xai on ft llama models
-* `03-hf-repr` = reproduce models in huggingface (SCIBERT, LLaMA, Phi-3)
+* `03-hf-repr` = reproduce models in huggingface (SCIBERT, LLaMA-2, LLaMA-3)
 
 ### Misc.
 
