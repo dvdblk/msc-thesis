@@ -131,7 +131,7 @@ def main(args):
 
         log.info("Starting to process abstracts")
         # sleep for a short while to avoid tqdm output bug
-        time.sleep(5)
+        time.sleep(10)
         queue_publications()
 
         with tqdm(
@@ -183,8 +183,13 @@ def main(args):
         for _ in range(num_workers):
             task_queue.put(None)
 
+        time.sleep(5)
         log.info(f"Finished processing abstracts", total_processed=total_processed)
 
+    # Close data manager
+    data_manager.close()
+
+    log.info("Exiting...")
 
 if __name__ == "__main__":
 

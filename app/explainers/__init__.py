@@ -40,24 +40,7 @@ def get_explainer(method_name, model, tokenizer, device, args):
 
     if method == ExplainerMethod.SHAP_PARTITION_TFIDF:
         return ExplainerClass(args.tfidf_corpus_path, model, tokenizer, device)
-    elif method == ExplainerMethod.ATTNLRP:
+    elif method == ExplainerMethod.ATTNLRP or method == ExplainerMethod.CPLRP:
         return ExplainerClass(args.model_family, model, tokenizer, device)
     else:
         return ExplainerClass(model, tokenizer, device)
-
-
-def process_abstract(abstract, explainer, model, tokenizer, device):
-    # Get prediction
-    inputs = tokenizer(
-        [abstract], padding=True, truncation=True, max_length=512, return_tensors="pt"
-    ).to(device)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    predicted_id = torch.argmax(probs, dim=-1).item()
-    predicted_label = model.config.id2label[predicted_id]
-
-    # Get explanation (apply XAI method)
-    xai_values = explainer(abstract)
-
-    return predicted_label, probs.tolist(), xai_values

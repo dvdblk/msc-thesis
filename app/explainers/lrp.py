@@ -78,8 +78,7 @@ class AttnLRPExplainer(LRPExplainer):
     """
 
     def __init__(self, model_family, model, tokenizer, device):
-        # TODO: remove LoRA layers if needed
-
+        # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_attnlrp.register(model)
         elif model_family == "llama":
@@ -99,7 +98,7 @@ class CPLRPExplainer(LRPExplainer):
     """
 
     def __init__(self, model_family, model, tokenizer, device):
-        # TODO: remove LoRA layers if needed
+        # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_cplrp.register(model)
         elif model_family == "llama":
