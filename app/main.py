@@ -8,18 +8,19 @@ import torch
 import torch.multiprocessing as mp
 
 import structlog
-from qdrant_client import models
 from tqdm import tqdm
 
 from queue import Empty as QueueEmptyException
-from app.utils import configure_structlog, setup_qdrant_client
+from app.utils import configure_structlog
+from app.utils.enum_action import EnumAction
 from app.models import setup_model_and_tokenizer, get_model_names_list
 from app.explainers import (
     get_xai_method_names_list,
-    process_abstract,
     get_explainer,
-    ExplainerMethod,
 )
+from app.data.enum import DataSource
+from app.explainers.model import XAIOutput
+from app.data.manager import QdrantManager, LocalManager
 
 configure_structlog()
 log = structlog.get_logger()
@@ -51,42 +52,21 @@ def worker_function(task_queue, result_queue, model, tokenizer, args):
         log.debug("Got publications", n_publications=len(publications))
 
         for publication in publications:
-            abstract = publication.payload.get("description", "")
-            title = publication.payload.get("title", "")
-            publication_id = publication.payload.get("id", "")
-            existing_xai = publication.payload.get("xai", [])
-            point_id = publication.id
+            preprocessed_abstract = ""
+            if publication.title is not None:
+                preprocessed_abstract += publication.title + " "
+            preprocessed_abstract += publication.abstract
 
-            preprocessed_abstract = title + " " + abstract
             try:
-                predicted_label, probs, xai_values = process_abstract(
-                    preprocessed_abstract, explainer, model, tokenizer, device
-                )
+                # Get the explanation
+                xai_output: XAIOutput = explainer.explain(preprocessed_abstract)
+                result_queue.put((publication, xai_output))
+                log.debug("Processed abstract", publication_id=publication.zora_id)
 
-                # TODO: add postprocessing here e.g. for tokens etc
-                if ExplainerMethod(args.method) == ExplainerMethod.ATTNLRP:
-                    # replace "[CLS]" and "[SEP]" tokens with empty string
-                    if xai_values["input_tokens"][0] == "[CLS]":
-                        xai_values["input_tokens"][0] = ""
-                    if xai_values["input_tokens"][-1] == "[SEP]":
-                        xai_values["input_tokens"][-1] = ""
-
-                existing_xai.append(
-                    {
-                        "xai_method": args.method,
-                        "model_family": args.model_family,
-                        "model_path": args.model_path,
-                        "predicted_label": predicted_label,
-                        "probs": probs,
-                        "xai_values": xai_values,
-                    }
-                )
-                result_queue.put((publication_id, point_id, existing_xai))
-                log.debug("Processed abstract", publication_id=publication_id)
             except Exception as e:
-                log.error(f"Error processing abstract {publication_id}: {str(e)}")
+                log.error(f"Error processing abstract {publication.zora_id}: {str(e)}")
                 log.error(traceback.format_exc())
-                result_queue.put((publication_id, point_id, None))
+                result_queue.put((publication, None))
 
 
 def main(args):
@@ -94,9 +74,19 @@ def main(args):
     model, tokenizer = setup_model_and_tokenizer(args)
     log.info("Loaded model and tokenizer")
 
-    # Connect to Qdrant
-    client = setup_qdrant_client()
-    log.info("Qdrant connection set up.")
+    # Setup data manager
+    data_manager = None
+    if args.data_source_target == DataSource.QDRANT:
+        data_manager = QdrantManager(
+            "publications", load_only_labelled_data=True, batch_size=args.batch_size
+        )
+    elif args.data_source_target == DataSource.LOCAL:
+        data_manager = LocalManager(
+            "./experiments/data/zo_up.csv",
+            "./explanations.json",
+            batch_size=args.batch_size,
+        )
+    # log.info("Data manager set up", data_source_and_target=args.data_source_target)
 
     # Set up multiprocessing
     num_gpus = torch.cuda.device_count()
@@ -114,81 +104,23 @@ def main(args):
     ):
 
         # Process publications
-        offset = 0
         total_processed = 0
         total_queued = 0
-        batch_size = 500
         n_publications = args.n_publications
         queue_low_water_mark = num_workers
         queue_high_water_mark = num_workers * 2
 
-        def queue_publications():
-            nonlocal offset, total_queued
-            while task_queue.qsize() * batch_size < queue_high_water_mark:
-                publications = client.scroll(
-                    collection_name="publications",
-                    limit=batch_size,
-                    offset=offset,
-                    # skips already processed publications with this method, model family and path
-                    scroll_filter=models.Filter(
-                        must_not=[
-                            models.FieldCondition(
-                                key="xai[].xai_method",
-                                match=models.MatchValue(value=args.method),
-                            ),
-                            models.FieldCondition(
-                                key="xai[].model_family",
-                                match=models.MatchValue(value=args.model_family),
-                            ),
-                            models.FieldCondition(
-                                key="xai[].model_path",
-                                match=models.MatchValue(value=args.model_path),
-                            ),
-                        ]
-                    ),
-                    with_payload=["description", "id", "title", "xai"],
-                )
-                if not publications[0]:
+        def queue_publications(chunk_size=20):
+            nonlocal total_queued
+            while task_queue.qsize() * args.batch_size < queue_high_water_mark:
+                publications = data_manager.load_data()
+                if publications is None:
                     return False
-                n_pubs = len(publications[0])
-                task_queue.put(publications[0])
-                offset += n_pubs
-                total_queued += n_pubs
-                log.debug(
-                    "Queued more publications",
-                    n_added=n_pubs,
-                    total_queued=total_queued,
-                )
-            return True
-
-        def queue_publications_with_label():
-            nonlocal offset, total_queued
-            chunk_size = 20
-
-            while task_queue.qsize() * batch_size < queue_high_water_mark:
-                publications = client.scroll(
-                    collection_name="publications",
-                    limit=batch_size,
-                    offset=offset,
-                    # skips already processed publications with this method, model family and path
-                    scroll_filter=models.Filter(
-                        must_not=[
-                            models.IsNullCondition(
-                                is_null=models.PayloadField(key="labels")
-                            )
-                        ]
-                    ),
-                    with_payload=["description", "id", "title", "xai"],
-                )
-                if not publications[0]:
-                    return False
-
-                for i in range(0, len(publications[0]), chunk_size):
-                    chunk = publications[0][i : i + chunk_size]
+                for i in range(0, len(publications), chunk_size):
+                    chunk = publications[i : i + chunk_size]
                     task_queue.put(chunk)
 
-                n_pubs = len(publications[0])
-                offset += n_pubs
+                n_pubs = len(publications)
                 total_queued += n_pubs
                 log.debug(
                     "Queued more publications",
@@ -200,7 +132,7 @@ def main(args):
         log.info("Starting to process abstracts")
         # sleep for a short while to avoid tqdm output bug
         time.sleep(5)
-        queue_publications_with_label()
+        queue_publications()
 
         with tqdm(
             total=n_publications, file=sys.stdout, position=0, leave=True
@@ -218,19 +150,17 @@ def main(args):
                 try:
                     result = result_queue.get(timeout=60)
                     if result is not None:
-                        publication_id, point_id, new_xai_field = result
-                        if new_xai_field is not None:
+                        publication, xai_output = result
+                        if xai_output is not None:
+                            data_manager.store_data(
+                                publication=publication,
+                                xai_output=xai_output,
+                                model_family=args.model_family,
+                                model_path=args.model_path,
+                            )
                             log.debug(
                                 "Created XAI for abstract",
-                                publication_id=publication_id,
-                                point_id=point_id,
-                            )
-                            client.set_payload(
-                                collection_name="publications",
-                                points=[point_id],
-                                payload={
-                                    "xai": new_xai_field,
-                                },
+                                id=publication.zora_id,
                             )
                         total_processed += 1
 
@@ -291,15 +221,34 @@ if __name__ == "__main__":
         type=int,
         default=100,
     )
+    parser.add_argument(
+        "--batch-size",
+        help="Batch size for loading data.",
+        type=int,
+        default=500,
+    )
 
     parser.add_argument(
         "--tfidf-corpus-path",
         help="Path to the corpus for TF-IDF vectorizer in SHAP Partition TF-IDF",
         required=False,
     )
+    # TODO: maybe allow for multiple data sources (e.g. load local file, upload to qdrant etc)
+    parser.add_argument(
+        "--data-source-target",
+        type=DataSource,
+        action=EnumAction,
+        required=True,
+        help="Specifies the source and target of input data (abstracts, explanations)",
+    )
+    # parser.add_argument(
+    #     "--output-dest",
+    #     type=OutputDestination,
+    #     choices=list(OutputDestination),
+    #     required=True,
+    #     help="Specifies the destination for output data (explanations)",
+    # )
 
-    # FIXME: Add publication retrieval method (e.g. qdrant vs dataset)
-    # parser.add_argument("--pub-retrieval-method", help="Method to retrieve publications.")
     parser.add_argument("-o", "--output-path", help="Path to save the explanations.")
     args = parser.parse_args()
 
@@ -309,5 +258,10 @@ if __name__ == "__main__":
             "The --tfidf-corpus-path argument is required for the 'shap-partition-tfidf' method"
         )
 
-    log.info(f"Starting explainer", method=args.method, model_family=args.model_family)
+    log.info(
+        f"Starting explainer",
+        data_source_target=args.data_source_target.value,
+        method=args.method,
+        model_family=args.model_family,
+    )
     main(args)

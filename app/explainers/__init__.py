@@ -6,22 +6,7 @@ from app.explainers.shap import (
     PartitionShapExplainer,
     TfIdfPartitionShapExplainer,
 )
-
-from enum import StrEnum, auto
-
-
-class ExplainerMethod(StrEnum):
-    def _generate_next_value_(name, start, count, last_values):
-        return name.lower().replace("_", "-")
-
-    SHAP_PARTITION = auto()
-    SHAP_KERNEL = auto()
-    SHAP_PARTITION_TFIDF = auto()
-    ATTNLRP = auto()
-    CPLRP = auto()
-    LIME = auto()
-    INTEGRATED_GRADIENTS = auto()
-    INPUTXGRADIENT = auto()
+from app.explainers.model import ExplainerMethod
 
 
 # Map of XAI methods to their respective Explainer classes
@@ -44,23 +29,6 @@ def get_xai_method_names_list():
     return methods_with_explainer
 
 
-def process_abstract(abstract, explainer, model, tokenizer, device):
-    # Get prediction
-    inputs = tokenizer(
-        [abstract], padding=True, truncation=True, max_length=512, return_tensors="pt"
-    ).to(device)
-    with torch.no_grad():
-        outputs = model(**inputs)
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    predicted_id = torch.argmax(probs, dim=-1).item()
-    predicted_label = model.config.id2label[predicted_id]
-
-    # Get explanation (apply XAI method)
-    xai_values = explainer(abstract)
-
-    return predicted_label, probs.tolist(), xai_values
-
-
 def get_explainer(method_name, model, tokenizer, device, args):
     """Returns an instance of the specified XAI method"""
     # verify that the method is supported
@@ -76,3 +44,20 @@ def get_explainer(method_name, model, tokenizer, device, args):
         return ExplainerClass(args.model_family, model, tokenizer, device)
     else:
         return ExplainerClass(model, tokenizer, device)
+
+
+def process_abstract(abstract, explainer, model, tokenizer, device):
+    # Get prediction
+    inputs = tokenizer(
+        [abstract], padding=True, truncation=True, max_length=512, return_tensors="pt"
+    ).to(device)
+    with torch.no_grad():
+        outputs = model(**inputs)
+    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+    predicted_id = torch.argmax(probs, dim=-1).item()
+    predicted_label = model.config.id2label[predicted_id]
+
+    # Get explanation (apply XAI method)
+    xai_values = explainer(abstract)
+
+    return predicted_label, probs.tolist(), xai_values

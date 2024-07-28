@@ -11,7 +11,8 @@ accelerate
 evaluate
 sentencepiece
 datasets
-lxt
+lime
+lxt==0.6.0
 wandb
 inseq[notebook]
 ferret-xai

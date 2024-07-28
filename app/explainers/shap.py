@@ -1,18 +1,20 @@
 import numpy as np
 import pandas as pd
 import shap
+import torch
 
 from shap.maskers import Text as TextMasker
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from app.explainers.base import BaseExplainer
+from app.explainers.model import XAIOutput, ExplainerMethod
 
 
 class TFIDFTextMasker(shap.maskers.Text):
-    """Masks out only the tokens that have higher than threshold TF-IDF scores."""
+    """Masker thaat masks out only the tokens that have higher than threshold TF-IDF scores."""
 
     def __init__(
-        self, vectorizer_data, threshold=0.4, tokenizer=None, mask_value=None, **kwargs
+        self, vectorizer_data, threshold=0.06, tokenizer=None, mask_value=None, **kwargs
     ):
         super().__init__(mask_token=mask_value, **kwargs)
         self.threshold = threshold
@@ -69,33 +71,82 @@ class TFIDFTextMasker(shap.maskers.Text):
 
 
 class ShapExplainer(BaseExplainer):
-    def __init__(self, model, tokenizer, device, algorithm, masker=None):
-        super().__init__(model, tokenizer, device)
+
+    def __init__(self, model, tokenizer, device, xai_method, algorithm, masker=None):
+        super().__init__(model, tokenizer, device, xai_method=xai_method)
+        # Set the explainer for SHAP subclasses
         self.explainer = shap.Explainer(
-            self.predictor,
+            self._predictor_func,
             algorithm=algorithm,
             masker=masker or TextMasker(self.tokenizer),
             silent=True,
         )
 
-    def explain(self, abstract):
+    def _predictor_func(self, text):
+        """Predictor function that SHAP uses while explaining"""
+        # TODO: this could/should probably be model dependent? but works with SciBERT for now
+        inputs = self.tokenizer(
+            text.tolist(),
+            padding=True,
+            truncation=True,
+            max_length=512,  # FIXME: this should be model dependent, SciBERT is 512
+            return_tensors="pt",
+        ).to(self.device)
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+        logits = outputs.logits.cpu()
+
+        # softmax
+        probs = torch.exp(logits) / torch.exp(logits).sum(-1, keepdims=True)
+        return probs
+
+    def explain(self, abstract) -> XAIOutput:
+        # Get SHAP values
         shap_values = self.explainer([abstract])
-        # 0 is the index of the first (and only) sample
-        return {
-            "token_scores": shap_values.values[0].tolist(),
-            "base_values": shap_values.base_values[0].tolist(),
-            "input_tokens": shap_values.data[0].tolist(),
-        }
+
+        # Get prediction probabilities and predicted_id with some tensor math
+        # to avoid calling the model again...
+        summed_shap_values = np.sum(shap_values.values, axis=1)
+        probabilities = summed_shap_values + shap_values.base_values[0]
+        predicted_id = np.argmax(probabilities)
+        predicted_label = self.model.config.id2label[predicted_id]
+
+        return XAIOutput(
+            text=abstract,
+            input_tokens=shap_values.data[
+                0  # 0 is the index of the first (and only) sample (abstract) that was used
+            ].tolist(),
+            token_scores=shap_values.values[0].tolist(),
+            predicted_id=predicted_id,
+            predicted_label=predicted_label,
+            probabilities=probabilities[0].tolist(),
+            xai_method=self.xai_method,
+            additional_values={
+                "base_values": shap_values.base_values[0].tolist(),
+            },
+        )
 
 
 class PartitionShapExplainer(ShapExplainer):
     def __init__(self, model, tokenizer, device):
-        super().__init__(model, tokenizer, device, algorithm="partition")
+        super().__init__(
+            model,
+            tokenizer,
+            device,
+            xai_method=ExplainerMethod.SHAP_PARTITION,
+            algorithm="partition",
+        )
 
 
 class KernelShapExplainer(ShapExplainer):
     def __init__(self, model, tokenizer, device):
-        super().__init__(model, tokenizer, device, algorithm="kernel")
+        super().__init__(
+            model,
+            tokenizer,
+            device,
+            xai_method=ExplainerMethod.SHAP_KERNEL,
+            algorithm="kernel",
+        )
 
 
 class TfIdfPartitionShapExplainer(ShapExplainer):
@@ -108,6 +159,7 @@ class TfIdfPartitionShapExplainer(ShapExplainer):
             model,
             tokenizer,
             device,
+            xai_method=ExplainerMethod.SHAP_PARTITION_TFIDF,
             algorithm="partition",
             masker=TFIDFTextMasker(
                 osdg_data["abstract"],
