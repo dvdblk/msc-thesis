@@ -1,14 +1,16 @@
 import torch
 
-from app.explainers.base import BaseExplainer
+from lxt.models.bert import attnlrp as bert_attnlrp, cp_lrp as bert_cplrp
+from lxt.models.llama import attnlrp as llama_attnlrp, cp_lrp as llama_cplrp
 
-from lxt.models.bert import attnlrp as bert_attnlrp
-from lxt.models.llama import attnlrp as llama_attnlrp
+from app.explainers.base import BaseExplainer
+from app.explainers.model import XAIOutput, ExplainerMethod
+from app.utils.tokenization import fix_bert_tokenization
 
 
 class LRPExplainer(BaseExplainer):
 
-    def __init__(self, model_family, model, tokenizer, device):
+    def __init__(self, model_family, model, tokenizer, device, xai_method):
         """
         Args:
             model_family (str): Model family (e.g. "bert", "llama", ...)
@@ -16,7 +18,7 @@ class LRPExplainer(BaseExplainer):
             tokenizer (transformers.PreTrainedTokenizer): Tokenizer
             device (torch.device): Device
         """
-        super().__init__(model, tokenizer, device)
+        super().__init__(model, tokenizer, device, xai_method=xai_method)
         self.model_family = model_family
 
     def explain(self, abstract):
@@ -25,26 +27,47 @@ class LRPExplainer(BaseExplainer):
         ).input_ids.to(self.device)
         inputs_embeds = self.model.bert.get_input_embeddings()(input_ids)
 
-        logits = self.model(inputs_embeds=inputs_embeds.requires_grad_()).logits
+        n_classes = self.model.num_labels
+        relevance_all = []
 
-        # We explain the sequence label: acceptable or unacceptable
-        max_logits, max_indices = torch.max(logits, dim=-1)
+        predicted_id = None
+        predicted_label = None
+        probabilities = None
 
-        # TODO: return predicted values and probs from here
-        # out = self.model.config.id2label[max_indices.item()]
+        for class_idx in range(n_classes):
+            _inputs_embeds = inputs_embeds.clone().detach().requires_grad_()
+            # forward pass
+            logits = self.model(inputs_embeds=_inputs_embeds).logits
 
-        max_logits.backward(max_logits)
+            if predicted_id is None:
+                _, max_indices = torch.max(logits, dim=-1)
 
-        relevance = inputs_embeds.grad.float().sum(-1).cpu()[0]
-        # normalize relevance between [-1, 1] for plotting
-        relevance = relevance / relevance.abs().max()
+                predicted_id = max_indices.item()
+                predicted_label = self.model.config.id2label[predicted_id]
+                probabilities = torch.softmax(logits, dim=-1).cpu().tolist()
+
+            class_logits = logits[0, class_idx]
+            class_logits.backward()
+            relevance = _inputs_embeds.grad.float().sum(-1).cpu()[0]
+            # normalize relevance between [-1, 1] for plotting
+            relevance = relevance / relevance.abs().max()
+            relevance_all.append(relevance)
 
         tokens = self.tokenizer.convert_ids_to_tokens(input_ids[0])
+        tokens = fix_bert_tokenization(tokens)
 
-        return {
-            "token_scores": relevance.tolist(),
-            "input_tokens": tokens,
-        }
+        # turn relevance list into a tensor
+        relevance_scores = torch.stack(relevance_all, dim=1)
+
+        return XAIOutput(
+            text=abstract,
+            input_tokens=tokens,
+            token_scores=relevance_scores.tolist(),
+            predicted_id=predicted_id,
+            predicted_label=predicted_label,
+            probabilities=probabilities,
+            xai_method=self.xai_method,
+        )
 
 
 class AttnLRPExplainer(LRPExplainer):
@@ -55,13 +78,17 @@ class AttnLRPExplainer(LRPExplainer):
     """
 
     def __init__(self, model_family, model, tokenizer, device):
+        # TODO: remove LoRA layers if needed
+
         if model_family == "scibert":
             bert_attnlrp.register(model)
         elif model_family == "llama":
             llama_attnlrp.register(model)
         else:
             raise ValueError(f"Unsupported model family for AttnLRP: {model_family}")
-        super().__init__(model_family, model, tokenizer, device)
+        super().__init__(
+            model_family, model, tokenizer, device, xai_method=ExplainerMethod.ATTNLRP
+        )
 
 
 class CPLRPExplainer(LRPExplainer):
@@ -72,7 +99,13 @@ class CPLRPExplainer(LRPExplainer):
     """
 
     def __init__(self, model_family, model, tokenizer, device):
-        super().__init__(model_family, model, tokenizer, device)
-
-    def explain(self, abstract):
-        pass
+        # TODO: remove LoRA layers if needed
+        if model_family == "scibert":
+            bert_cplrp.register(model)
+        elif model_family == "llama":
+            llama_cplrp.register(model)
+        else:
+            raise ValueError(f"Unsupported model family for CPLRP: {model_family}")
+        super().__init__(
+            model_family, model, tokenizer, device, xai_method=ExplainerMethod.CPLRP
+        )
