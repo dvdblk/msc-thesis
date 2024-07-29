@@ -13,13 +13,14 @@ from tqdm import tqdm
 from queue import Empty as QueueEmptyException
 from app.utils import configure_structlog
 from app.utils.enum_action import EnumAction
+from app.utils.tokenization import prepare_fixed_bert_tokens_for_pdf_viz
 from app.models import setup_model_and_tokenizer, get_model_names_list
 from app.explainers import (
     get_xai_method_names_list,
     get_explainer,
 )
 from app.data.enum import DataSource
-from app.explainers.model import XAIOutput
+from app.explainers.model import XAIOutput, ExplainerMethod
 from app.data.manager import QdrantManager, LocalManager
 
 configure_structlog()
@@ -69,24 +70,7 @@ def worker_function(task_queue, result_queue, model, tokenizer, args):
                 result_queue.put((publication, None))
 
 
-def main(args):
-
-    model, tokenizer = setup_model_and_tokenizer(args)
-    log.info("Loaded model and tokenizer")
-
-    # Setup data manager
-    data_manager = None
-    if args.data_source_target == DataSource.QDRANT:
-        data_manager = QdrantManager(
-            "publications", load_only_labelled_data=True, batch_size=args.batch_size
-        )
-    elif args.data_source_target == DataSource.LOCAL:
-        data_manager = LocalManager(
-            "./experiments/data/zo_up.csv",
-            "./explanations.json",
-            batch_size=args.batch_size,
-        )
-    # log.info("Data manager set up", data_source_and_target=args.data_source_target)
+def explain(args, model, tokenizer, data_manager):
 
     # Set up multiprocessing
     num_gpus = torch.cuda.device_count()
@@ -131,7 +115,7 @@ def main(args):
 
         log.info("Starting to process abstracts")
         # sleep for a short while to avoid tqdm output bug
-        time.sleep(10)
+        time.sleep(2)
         queue_publications()
 
         # in seconds
@@ -193,11 +177,62 @@ def main(args):
 
     log.info("Exiting...")
 
+
+def visualize(args, model, tokenizer, data_manager):
+    # Load data into a DataFrame
+    df = data_manager.load_data()
+
+    # Get abstract by index and explanation
+    abstract = df.iloc[args.index].abstract
+
+    # Get one gpu if available
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    log = structlog.get_logger().bind(device=device)
+    model = model.to(device)
+    explainer = get_explainer(args.method, model, tokenizer, device, args)
+
+    # Produce explanation
+    xai_output: XAIOutput = explainer.explain(abstract)
+
+    # Turn tokens scores into a tensor and transpose
+    token_scores = torch.tensor(xai_output.token_scores).transpose(0, 1)
+    class_index = args.class_index or xai_output.predicted_id
+
+    # Prepare tokens for visualization (add underscores etc)
+    from lxt.utils import pdf_heatmap, clean_tokens
+
+    tokens = clean_tokens(
+        prepare_fixed_bert_tokens_for_pdf_viz(xai_output.input_tokens)
+    )
+
+    emphasize_deviations = (
+        xai_output.xai_method == ExplainerMethod.SHAP_PARTITION
+        or xai_output.xai_method == ExplainerMethod.SHAP_PARTITION_TFIDF,
+    )
+    # Create visualization and save it
+    from app.utils.sdg import get_sdg_colormap
+
+    pdf_heatmap(
+        tokens,
+        token_scores[class_index],
+        cmap=get_sdg_colormap(class_index + 1),
+        emphasize_deviations=emphasize_deviations,
+        path=args.output_path,
+        backend="xelatex",
+    )
+
+    log.info("Visualization saved", predicted_label=xai_output.predicted_label)
+
+
+def evaluate(args, model, tokenizer, data_manager):
+    pass
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(
         prog="SDG text-classification explainer CLI",
-        description="Loads a model and explains its predictions on given abstracts.",
+        description="CLI for XAI explanation generation for SDG text classification models.",
     )
     parser.add_argument(
         "--method",
@@ -217,25 +252,6 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
-        "--n-workers",
-        help="Number of workers PER GPU to use for parallel processing (computation of XAI values).",
-        type=int,
-        default=1,
-    )
-    parser.add_argument(
-        "--n-publications",
-        help="Limit of publications to process in total.",
-        type=int,
-        default=100,
-    )
-    parser.add_argument(
-        "--batch-size",
-        help="Batch size for loading data.",
-        type=int,
-        default=500,
-    )
-
-    parser.add_argument(
         "--tfidf-corpus-path",
         help="Path to the corpus for TF-IDF vectorizer in SHAP Partition TF-IDF",
         required=False,
@@ -248,15 +264,61 @@ if __name__ == "__main__":
         required=True,
         help="Specifies the source and target of input data (abstracts, explanations)",
     )
-    # parser.add_argument(
-    #     "--output-dest",
-    #     type=OutputDestination,
-    #     choices=list(OutputDestination),
-    #     required=True,
-    #     help="Specifies the destination for output data (explanations)",
-    # )
+    parser.add_argument(
+        "--batch-size",
+        help="Batch size for loading data.",
+        type=int,
+        default=500,
+    )
+    parser.add_argument(
+        "-i",
+        "--input-path",
+        help="Path to the input data (abstracts, csv file).",
+    )
+    parser.add_argument(
+        "-o",
+        "--output-path",
+        help="Path to save the explanations, evaluation or visualization results.",
+    )
 
-    parser.add_argument("-o", "--output-path", help="Path to save the explanations.")
+    # Add subparsers for different actions ('explain', 'visualize', 'evaluate')
+    subparsers = parser.add_subparsers(dest="action", required=True)
+
+    # 'Explain' action
+    explain_parser = subparsers.add_parser(
+        "explain", help="Explain predictions on given abstracts."
+    )
+    explain_parser.add_argument(
+        "--n-workers",
+        help="Number of workers PER GPU to use for parallel processing (computation of XAI values).",
+        type=int,
+        default=1,
+    )
+    explain_parser.add_argument(
+        "--n-publications",
+        help="Limit of publications to process in total.",
+        type=int,
+        default=100,
+    )
+
+    visualize_parser = subparsers.add_parser(
+        "visualize", help="Visualize explanations into a pdf file."
+    )
+    visualize_parser.add_argument(
+        "--index",
+        help="Index of the publication to visualize. For local, use 0-based index, for Qdrant use point ID.",
+        type=int,
+        required=True,
+    )
+    visualize_parser.add_argument(
+        "--class-index",
+        help="Index of the class to visualize. (0-indexed SDG classes). If `None` then predicted class is used.",
+        type=int,
+        default=None,
+    )
+
+    evaluate_parser = subparsers.add_parser("evaluate", help="Evaluate explanations")
+
     args = parser.parse_args()
 
     # Validate args
@@ -265,10 +327,37 @@ if __name__ == "__main__":
             "The --tfidf-corpus-path argument is required for the 'shap-partition-tfidf' method"
         )
 
+    if args.data_source_target == DataSource.LOCAL and not args.input_path:
+        parser.error(
+            "The --input-path argument is required for the 'local' data source"
+        )
+
+    model, tokenizer = setup_model_and_tokenizer(args)
+    log.info("Loaded model and tokenizer", model_family=args.model_family)
+
+    # Setup data manager
+    data_manager = None
+    if args.data_source_target == DataSource.QDRANT:
+        data_manager = QdrantManager(
+            "publications", load_only_labelled_data=True, batch_size=args.batch_size
+        )
+    elif args.data_source_target == DataSource.LOCAL:
+        data_manager = LocalManager(
+            input_file_path=args.input_path,
+            output_file_path=args.output_path,
+            batch_size=args.batch_size,
+        )
     log.info(
-        f"Starting explainer",
-        data_source_target=args.data_source_target.value,
-        method=args.method,
-        model_family=args.model_family,
+        "Data manager set up", data_source_and_target=args.data_source_target.value
     )
-    main(args)
+
+    log.info(
+        f"Starting {args.action} action",
+        method=args.method,
+    )
+    if args.action == "explain":
+        explain(args, model, tokenizer, data_manager)
+    elif args.action == "visualize":
+        visualize(args, model, tokenizer, data_manager)
+    elif args.action == "evaluate":
+        evaluate(args, model, tokenizer, data_manager)

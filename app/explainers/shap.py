@@ -20,7 +20,9 @@ class TFIDFTextMasker(shap.maskers.Text):
         self.threshold = threshold
 
         # fit TF-IDF vectorizer
-        vectorizer = TfidfVectorizer(tokenizer=tokenizer.tokenize)
+        vectorizer = TfidfVectorizer(
+            tokenizer=tokenizer.tokenize, token_pattern=".", max_df=0.96
+        )
         vectorizer.fit_transform(vectorizer_data)
         self.tokenizer = tokenizer
         self.vectorizer = vectorizer

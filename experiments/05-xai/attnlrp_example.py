@@ -86,6 +86,7 @@ relevance = relevance / relevance.abs().max()
 
 # remove '_' characters from token strings
 tokens = tokenizer.convert_ids_to_tokens(input_ids[0])
+print(tokens)
 tokens = clean_tokens(tokens)
 print(tokens)
 

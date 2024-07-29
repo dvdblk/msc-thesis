@@ -1,4 +1,7 @@
 def fix_bert_tokenization(tokens):
+    """Fixes BERT tokenization by removing special tokens and merging subwords
+    for easier SDGRS visualization that resembles SHAP style merged tokens.
+    """
     fixed_tokens = []
     for i, token in enumerate(tokens):
         if i == 0 and token == "[CLS]":
@@ -41,3 +44,15 @@ def fix_bert_tokenization(tokens):
         fixed_tokens[-1] = fixed_tokens[-1].rstrip()
 
     return fixed_tokens
+
+
+def prepare_fixed_bert_tokens_for_pdf_viz(tokens):
+    """
+    Move space from end of word to beginning of next one as an underscore
+    """
+    for i in range(1, len(tokens)):
+        if tokens[i - 1].endswith(" ") and tokens[i] != "[SEP]":
+            tokens[i] = "▁" + tokens[i]
+            tokens[i - 1] = tokens[i - 1].rstrip()
+
+    return tokens

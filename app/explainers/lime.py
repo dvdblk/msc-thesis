@@ -9,7 +9,7 @@ from app.utils.tokenization import fix_bert_tokenization
 
 class LimeExplainer(BaseExplainer):
 
-    def __init__(self, model, tokenizer, device, num_samples=2000, max_samples=5000):
+    def __init__(self, model, tokenizer, device, num_samples=750, max_samples=3000):
         super().__init__(model, tokenizer, device, xai_method=ExplainerMethod.LIME)
         self.num_samples = num_samples
         self.max_samples = max_samples
