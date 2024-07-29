@@ -6,6 +6,7 @@ from app.explainers.shap import (
     PartitionShapExplainer,
     TfIdfPartitionShapExplainer,
 )
+from app.explainers.lime import LimeExplainer
 from app.explainers.model import ExplainerMethod
 
 
@@ -16,7 +17,7 @@ __methods_map = {
     ExplainerMethod.SHAP_PARTITION_TFIDF: TfIdfPartitionShapExplainer,
     ExplainerMethod.ATTNLRP: AttnLRPExplainer,
     ExplainerMethod.CPLRP: CPLRPExplainer,
-    ExplainerMethod.LIME: None,
+    ExplainerMethod.LIME: LimeExplainer,
     ExplainerMethod.INTEGRATED_GRADIENTS: None,
     ExplainerMethod.INPUTXGRADIENT: None,
 }

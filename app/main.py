@@ -134,6 +134,8 @@ def main(args):
         time.sleep(10)
         queue_publications()
 
+        # in seconds
+        queue_waiting_timeout = 120
         with tqdm(
             total=n_publications, file=sys.stdout, position=0, leave=True
         ) as pbar:
@@ -148,7 +150,7 @@ def main(args):
                 #             break
 
                 try:
-                    result = result_queue.get(timeout=60)
+                    result = result_queue.get(timeout=queue_waiting_timeout)
                     if result is not None:
                         publication, xai_output = result
                         if xai_output is not None:
@@ -176,7 +178,7 @@ def main(args):
                             )
                 except QueueEmptyException:
                     log.warning(
-                        f"Result queue is empty (timed out after 10s). Waiting for more results..."
+                        f"Result queue is empty (timed out after {queue_waiting_timeout}s). This can happen if explanation methods are taking too long to generate explanations. Waiting for more results..."
                     )
 
         # Signal workers to stop

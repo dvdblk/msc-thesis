@@ -64,6 +64,52 @@ tokens_with_combined_words = [
     "[SEP]",
 ]
 
+lime_tokens = [
+    "Rein",
+    "##sur",
+    "##ance",
+    "or",
+    "Sec",
+    "##uri",
+    "##tization",
+    ":",
+    "The",
+    "Case",
+    "of",
+    "Natural",
+    "Cat",
+    "##astro",
+    "##ph",
+    "##e",
+    "Risk",
+    "We",
+    "investigate",
+    "the",
+    "suitability",
+    "of",
+    "sec",
+    "##uri",
+    "##tization",
+    "as",
+    "an",
+    "alternative",
+    "to",
+    "rein",
+    "##sur",
+    "##ance",
+    "for",
+    "the",
+    "purpose",
+    "of",
+    "transferring",
+    "natural",
+    "catast",
+    "##roph",
+    "##e",
+    "risk",
+    ".",
+]
+
 
 def fix_bert_tokenization(tokens):
     fixed_tokens = []
@@ -109,7 +155,7 @@ def fix_bert_tokenization(tokens):
 
     return fixed_tokens
 
-print(fix_bert_tokenization(tokens_with_combined_words))
+print(fix_bert_tokenization(lime_tokens))
 
 assert fix_bert_tokenization(tokens_scibert_attnlrp) == tokens_scibert_shap, (
     fix_bert_tokenization(tokens_scibert_attnlrp),
