@@ -23,7 +23,7 @@ __methods_map = {
     ExplainerMethod.CPLRP: CPLRPExplainer,
     ExplainerMethod.LIME: LimeExplainer,
     ExplainerMethod.INTEGRATED_GRADIENT: IntegratedGradientExplainer,
-    ExplainerMethod.INPUTXGRADIENT: GradientExplainer,
+    ExplainerMethod.GRADIENTXINPUT: GradientExplainer,
 }
 
 
@@ -44,7 +44,12 @@ def get_explainer(method_name, model, tokenizer, device, args):
     method = ExplainerMethod(method_name)
 
     if method == ExplainerMethod.SHAP_PARTITION_TFIDF:
-        return ExplainerClass(args.tfidf_corpus_path, model, tokenizer, device)
+        # pad the end of TFIDF mask in case the model is 'scibert'
+        should_pad_end_of_mask = args.model_family == "scibert"
+
+        return ExplainerClass(
+            args.tfidf_corpus_path, should_pad_end_of_mask, model, tokenizer, device
+        )
     elif method == ExplainerMethod.ATTNLRP or method == ExplainerMethod.CPLRP:
         return ExplainerClass(args.model_family, model, tokenizer, device)
     else:

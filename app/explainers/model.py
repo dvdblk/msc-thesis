@@ -19,7 +19,7 @@ class ExplainerMethod(StrEnum):
     CPLRP = auto()
     LIME = auto()
     INTEGRATED_GRADIENT = auto()
-    INPUTXGRADIENT = auto()
+    GRADIENTXINPUT = auto()
 
 
 @dataclass

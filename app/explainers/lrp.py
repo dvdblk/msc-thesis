@@ -13,7 +13,7 @@ class LRPExplainer(BaseExplainer):
     def __init__(self, model_family, model, tokenizer, device, xai_method):
         """
         Args:
-            model_family (str): Model family (e.g. "bert", "llama", ...)
+            model_family (str): Model family (e.g. "bert", "llama2", ...)
             model (torch.nn.Module): Model
             tokenizer (transformers.PreTrainedTokenizer): Tokenizer
             device (torch.device): Device
@@ -25,7 +25,11 @@ class LRPExplainer(BaseExplainer):
         input_ids = self.tokenizer(
             abstract, max_length=512, padding=True, truncation=True, return_tensors="pt"
         ).input_ids.to(self.device)
-        inputs_embeds = self.model.bert.get_input_embeddings()(input_ids)
+
+        if self.model_family == "scibert":
+            inputs_embeds = self.model.bert.embeddings.word_embeddings(input_ids)
+        elif self.model_family == "llama2" or self.model_family == "llama3":
+            inputs_embeds = self.model.get_input_embeddings()(input_ids)
 
         n_classes = self.model.num_labels
         relevance_all = []
@@ -81,7 +85,7 @@ class AttnLRPExplainer(LRPExplainer):
         # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_attnlrp.register(model)
-        elif model_family == "llama":
+        elif model_family == "llama2" or model_family == "llama3":
             llama_attnlrp.register(model)
         else:
             raise ValueError(f"Unsupported model family for AttnLRP: {model_family}")
@@ -101,7 +105,7 @@ class CPLRPExplainer(LRPExplainer):
         # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_cplrp.register(model)
-        elif model_family == "llama":
+        elif model_family == "llama2" or model_family == "llama3":
             llama_cplrp.register(model)
         else:
             raise ValueError(f"Unsupported model family for CPLRP: {model_family}")

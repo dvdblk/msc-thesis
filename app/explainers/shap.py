@@ -14,10 +14,25 @@ class TFIDFTextMasker(shap.maskers.Text):
     """Masker thaat masks out only the tokens that have higher than threshold TF-IDF scores."""
 
     def __init__(
-        self, vectorizer_data, threshold=0.06, tokenizer=None, mask_value=None, **kwargs
+        self,
+        vectorizer_data,
+        threshold=0.06,
+        pad_end=True,
+        tokenizer=None,
+        mask_value=None,
+        **kwargs
     ):
+        """
+        Args:
+            vectorizer_data: list of strings to fit the TF-IDF vectorizer
+            threshold: threshold for the TF-IDF scores
+            pad_end: whether to pad the mask with zeros at the end of the mask (tokens)
+            tokenizer: tokenizer to tokenize the input strings
+            mask_value: mask value
+        """
         super().__init__(mask_token=mask_value, **kwargs)
         self.threshold = threshold
+        self.pad_end = pad_end
 
         # fit TF-IDF vectorizer
         vectorizer = TfidfVectorizer(
@@ -59,7 +74,9 @@ class TFIDFTextMasker(shap.maskers.Text):
         tf_idf_mask = ~tf_idf_mask
 
         # make sure to pad new_mask to the same length as mask
-        new_mask = np.pad(tf_idf_mask, (1, 1), mode="constant", constant_values=False)
+        new_mask = np.pad(
+            tf_idf_mask, (1, int(self.pad_end)), mode="constant", constant_values=False
+        )
 
         # do a bitwise or between new_mask and original mask
         new_mask = np.bitwise_or(new_mask, mask)
@@ -94,8 +111,13 @@ class ShapExplainer(BaseExplainer):
             max_length=512,  # FIXME: this should be model dependent, SciBERT is 512
             return_tensors="pt",
         ).to(self.device)
+
         with torch.no_grad():
             outputs = self.model(**inputs)
+            # check if the outputs are float16 and convert them to float32 otherwise shap complains
+            if outputs.logits.dtype == torch.bfloat16:
+                outputs.logits = outputs.logits.float()
+
         logits = outputs.logits.cpu()
 
         # softmax
@@ -153,7 +175,9 @@ class KernelShapExplainer(ShapExplainer):
 
 class TfIdfPartitionShapExplainer(ShapExplainer):
 
-    def __init__(self, tf_idf_data_path, model, tokenizer, device):
+    def __init__(
+        self, tf_idf_data_path, should_pad_end_of_mask, model, tokenizer, device
+    ):
         # Load OSDG data
         osdg_data = pd.read_csv(tf_idf_data_path)
 
@@ -165,6 +189,7 @@ class TfIdfPartitionShapExplainer(ShapExplainer):
             algorithm="partition",
             masker=TFIDFTextMasker(
                 osdg_data["abstract"],
+                pad_end=should_pad_end_of_mask,
                 tokenizer=tokenizer,
                 threshold=0.06,
             ),

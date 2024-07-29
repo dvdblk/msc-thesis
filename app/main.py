@@ -201,9 +201,16 @@ def visualize(args, model, tokenizer, data_manager):
     # Prepare tokens for visualization (add underscores etc)
     from lxt.utils import pdf_heatmap, clean_tokens
 
-    tokens = clean_tokens(
-        prepare_fixed_bert_tokens_for_pdf_viz(xai_output.input_tokens)
-    )
+    tokens = xai_output.input_tokens
+
+    # Postprocess tokens for visualization
+    if args.model_family == "llama2":
+        for i in range(1, len(tokens)):
+            if tokens[i].startswith(" "):
+                tokens[i - 1] += " "
+                tokens[i] = tokens[i].lstrip()
+
+    tokens = clean_tokens(prepare_fixed_bert_tokens_for_pdf_viz(tokens))
 
     emphasize_deviations = (
         xai_output.xai_method == ExplainerMethod.SHAP_PARTITION

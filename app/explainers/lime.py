@@ -31,6 +31,9 @@ class LimeExplainer(BaseExplainer):
             with torch.no_grad():
                 outputs = self.model(**inputs)
 
+            if outputs.logits.dtype == torch.bfloat16:
+                outputs.logits = outputs.logits.float()
+
             logits = outputs.logits.cpu()
             probs = torch.softmax(logits, dim=-1)
             all_probs.append(probs[0])
