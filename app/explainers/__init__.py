@@ -6,6 +6,10 @@ from app.explainers.shap import (
     PartitionShapExplainer,
     TfIdfPartitionShapExplainer,
 )
+from app.explainers.gradient import (
+    GradientExplainer,
+    IntegratedGradientExplainer,
+)
 from app.explainers.lime import LimeExplainer
 from app.explainers.model import ExplainerMethod
 
@@ -18,8 +22,8 @@ __methods_map = {
     ExplainerMethod.ATTNLRP: AttnLRPExplainer,
     ExplainerMethod.CPLRP: CPLRPExplainer,
     ExplainerMethod.LIME: LimeExplainer,
-    ExplainerMethod.INTEGRATED_GRADIENTS: None,
-    ExplainerMethod.INPUTXGRADIENT: None,
+    ExplainerMethod.INTEGRATED_GRADIENT: IntegratedGradientExplainer,
+    ExplainerMethod.INPUTXGRADIENT: GradientExplainer,
 }
 
 

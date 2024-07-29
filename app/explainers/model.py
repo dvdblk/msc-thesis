@@ -18,7 +18,7 @@ class ExplainerMethod(StrEnum):
     ATTNLRP = auto()
     CPLRP = auto()
     LIME = auto()
-    INTEGRATED_GRADIENTS = auto()
+    INTEGRATED_GRADIENT = auto()
     INPUTXGRADIENT = auto()
 
 
