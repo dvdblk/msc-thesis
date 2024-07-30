@@ -257,6 +257,48 @@ def visualize(args, model, tokenizer, data_manager):
 
     log.info("Visualization saved", predicted_label=xai_output.predicted_label)
 
+    # Faithfulness evaluation
+    from ferret import Benchmark
+    from ferret.explainers.explanation import Explanation as FerretExplanation
+    import numpy as np
+
+    bench = Benchmark(model, tokenizer)
+
+    _tokenized_text = tokenizer.tokenize(
+        xai_output.text,
+        max_length=len(xai_output.input_tokens),
+        add_special_tokens=True,
+    )
+    _token_ids = tokenizer.convert_tokens_to_ids(_tokenized_text)
+    decoded_text_from_tokens = tokenizer.decode(_token_ids)
+
+    ferret_explanation = FerretExplanation(
+        text=decoded_text_from_tokens,
+        tokens=_tokenized_text,
+        scores=np.array(xai_output.token_scores)[:, class_index],
+        explainer=xai_output.xai_method.value,
+        target=class_index,
+    )
+
+    evaluation = bench.evaluate_explanation(
+        ferret_explanation,
+        class_index,
+        show_progress=False,
+        remove_first_last=False,
+    )
+
+    # Create a dictionary with rounded scores
+    faithfulness_scores = {
+        e.name: round(e.score, 4) for e in evaluation.evaluation_scores
+    }
+
+    # Log the faithfulness scores as a single dictionary
+    log.info(
+        "Completed evaluating for faithfulness of explanation.",
+        faithfulness_scores=faithfulness_scores,
+        predicted_label=xai_output.predicted_label,
+    )
+
 
 def evaluate(args, model, tokenizer, data_manager):
     # Load data into a DataFrame

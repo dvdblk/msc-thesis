@@ -1,21 +1,86 @@
-from typing import List
+import numpy as np
+from ferret import Benchmark
 from ferret.explainers.explanation import Explanation as FerretExplanation
-from ferret.evaluators.faithfulness_measures import (
-    AOPC_Comprehensiveness_Evaluation,
-    AOPC_Sufficiency_Evaluation,
-    TauLOO_Evaluation,
-)
 from ferret.evaluators.evaluation import (
     ExplanationEvaluation as FerretExplanationEvaluation,
 )
-from ferret import Benchmark
-
-from app.explainers.model import XAIOutput
+import torch
 
 
-def get_evaluation(
-    explanation: XAIOutput, model, tokenizer
-) -> List[FerretExplanationEvaluation]:
-    bench = Benchmark()
+class XAIEvaluator:
+    """
+    A class for evaluating XAI explanations using the Ferret library.
+    """
 
-    # For each class in
+    def __init__(self, model, tokenizer, device):
+        """
+        Initialize the XAIEvaluator.
+
+        Args:
+            model: The model to be evaluated.
+            tokenizer: The tokenizer used by the model.
+            device: The device (CPU or GPU) to run the evaluation on.
+        """
+        self.model = model.to(device)
+        self.tokenizer = tokenizer
+        self.device = device
+        self.bench = Benchmark(model, tokenizer)
+
+    def evaluate_explanation(
+        self, xai_output, class_index
+    ) -> FerretExplanationEvaluation:
+        """
+        Evaluate a single explanation for a specific class.
+
+        Args:
+            xai_output: The output from the XAI method.
+            class_index: The index of the class to evaluate.
+
+        Returns:
+            An evaluation object from the Ferret library.
+        """
+        _tokenized_text = self.tokenizer.tokenize(
+            xai_output.text,
+            max_length=len(xai_output.input_tokens),
+            add_special_tokens=True,
+        )
+        _token_ids = self.tokenizer.convert_tokens_to_ids(_tokenized_text)
+        decoded_text_from_tokens = self.tokenizer.decode(_token_ids)
+
+        ferret_explanation = FerretExplanation(
+            text=decoded_text_from_tokens,
+            tokens=_tokenized_text,
+            scores=np.array(xai_output.token_scores)[:, class_index],
+            explainer=xai_output.xai_method.value,
+            target=class_index,
+        )
+
+        evaluation = self.bench.evaluate_explanation(
+            ferret_explanation,
+            class_index,
+            show_progress=False,
+            remove_first_last=False,
+        )
+
+        return evaluation
+
+    def evaluate_sample(self, xai_output) -> np.ndarray:
+        """
+        Evaluate all classes for a single sample.
+
+        Args:
+            xai_output: The output from the XAI method for a single sample.
+
+        Returns:
+            A numpy array of shape (num_labels, 3) containing evaluation scores for each class.
+            In the order: aopc_compr, aopc_suff, taucorr_loo
+        """
+        evaluations_for_explanations = np.zeros((self.model.num_labels, 3))
+
+        for class_idx in range(self.model.num_labels):
+            evaluation_for_class = self.evaluate_explanation(xai_output, class_idx)
+            evaluations_for_explanations[class_idx] = np.array(
+                list(map(lambda e: e.score, evaluation_for_class.evaluation_scores))
+            )
+
+        return evaluations_for_explanations
