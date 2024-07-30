@@ -28,7 +28,11 @@ class LRPExplainer(BaseExplainer):
 
         if self.model_family == "scibert":
             inputs_embeds = self.model.bert.embeddings.word_embeddings(input_ids)
-        elif self.model_family == "llama2" or self.model_family == "llama3":
+        elif (
+            self.model_family == "llama2"
+            or self.model_family == "llama3"
+            or self.model_family == "unllama3"
+        ):
             inputs_embeds = self.model.get_input_embeddings()(input_ids)
 
         n_classes = self.model.num_labels
@@ -85,7 +89,11 @@ class AttnLRPExplainer(LRPExplainer):
         # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_attnlrp.register(model)
-        elif model_family == "llama2" or model_family == "llama3":
+        elif (
+            model_family == "llama2"
+            or model_family == "llama3"
+            or model_family == "unllama3"
+        ):
             llama_attnlrp.register(model)
         else:
             raise ValueError(f"Unsupported model family for AttnLRP: {model_family}")
@@ -105,7 +113,11 @@ class CPLRPExplainer(LRPExplainer):
         # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_cplrp.register(model)
-        elif model_family == "llama2" or model_family == "llama3":
+        elif (
+            model_family == "llama2"
+            or model_family == "llama3"
+            or model_family == "unllama3"
+        ):
             llama_cplrp.register(model)
         else:
             raise ValueError(f"Unsupported model family for CPLRP: {model_family}")
