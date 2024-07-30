@@ -291,7 +291,7 @@ def evaluate(args, model, tokenizer, data_manager):
     evaluations_for_explanations = np.zeros((len(df), model.num_labels, 3))
     log.info("Starting faithfulness evaluation", n_samples=len(df))
 
-    for sample_i in tqdm(range(20), desc="Evaluating explanations"):
+    for sample_i in tqdm(range(len(df)), desc="Evaluating explanations"):
         abstract = df.iloc[sample_i].abstract
         xai_output = explainer.explain(abstract)
         explanations.append(xai_output)
