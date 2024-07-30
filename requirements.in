@@ -15,7 +15,7 @@ lime
 lxt==0.6.0
 wandb
 inseq[notebook]
-ferret-xai
+ferret-xai==0.4.2
 ipywidgets
 python-dotenv
 structlog

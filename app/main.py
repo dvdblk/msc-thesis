@@ -259,8 +259,72 @@ def visualize(args, model, tokenizer, data_manager):
 
 
 def evaluate(args, model, tokenizer, data_manager):
-    pass
+    # Load data into a DataFrame
+    df = data_manager.load_data()
 
+    # Model + explainer setup
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    log = structlog.get_logger().bind(device=device)
+    model = model.to(device)
+    explainer = get_explainer(args.method, model, tokenizer, device, args)
+    evaluator = None
+
+    # create an array that will store the faithfulness scores
+    # it has the shape (n_samples, n_classes, 3 faithfulness scores)
+    import numpy as np
+
+    evaluations = np.zeros((len(df), model.num_labels, 3))
+
+    from ferret import Benchmark
+    from ferret.explainers.explanation import Explanation as FerretExplanation
+
+    bench = Benchmark(model, tokenizer)
+
+    explanations = []  # (n_samples, n_classes)
+    for i in range(len(df)):
+        # Get abstract by index
+        abstract = df.iloc[i].abstract
+        xai_output: XAIOutput = explainer.explain(abstract)
+        explanations.append(xai_output)
+
+        # Map XAIOutput to FerretExplanation
+        # one FerretExplanation per class (17)
+        ferret_explanations = []
+        for class_idx in range(model.num_labels):
+            # XAI_outpiut.token_scores is in the shape (n_tokens, n_classes)
+            token_scores_array = np.array(xai_output.token_scores)
+            # tokenize the original text to length of current tokens
+            _tokenized_text = tokenizer.tokenize(
+                xai_output.text,
+                max_length=len(xai_output.input_tokens),
+                add_special_tokens=True,
+            )
+            _token_ids = tokenizer.convert_tokens_to_ids(_tokenized_text)
+            decoded_text_from_tokens = tokenizer.decode(_token_ids)
+            # assert (
+            #     decoded_text_from_tokens
+            #     == xai_output.text[: len(decoded_text_from_tokens)]
+            # )
+            print(decoded_text_from_tokens)
+            print(len(xai_output.input_tokens), xai_output.input_tokens)
+            print(len(_tokenized_text), _tokenized_text)
+            # assert xai_output.input_tokens == _tokenized_text
+            ferret_explanation = FerretExplanation(
+                text=decoded_text_from_tokens,
+                tokens=_tokenized_text,
+                scores=token_scores_array[:, class_idx],
+                explainer=xai_output.xai_method.value,
+                target=class_idx,
+            )
+            print(ferret_explanation)
+            # for each class of a single abstract, get three scores
+            result = bench.evaluate_explanation(
+                ferret_explanation,
+                class_idx,
+                remove_first_last=False,
+            )
+            print(result)
+            return
 
 if __name__ == "__main__":
 
@@ -366,6 +430,7 @@ if __name__ == "__main__":
             "The --input-path argument is required for the 'local' data source"
         )
 
+    log.info("Parsed arguments, loading model and tokenizer...")
     model, tokenizer = setup_model_and_tokenizer(args)
     log.info("Loaded model and tokenizer", model_family=args.model_family)
 
