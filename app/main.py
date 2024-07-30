@@ -11,6 +11,7 @@ import structlog
 from tqdm import tqdm
 
 from queue import Empty as QueueEmptyException
+from lxt.utils import pdf_heatmap, clean_tokens
 from app.utils import configure_structlog
 from app.utils.enum_action import EnumAction
 from app.utils.tokenization import prepare_fixed_bert_tokens_for_pdf_viz
@@ -197,15 +198,8 @@ def visualize(args, model, tokenizer, data_manager):
     # Turn tokens scores into a tensor and transpose
     # token_scores is now of shape (num_classes, num_tokens)
     token_scores = torch.tensor(xai_output.token_scores).transpose(0, 1)
-    # Normalize token scores per class
-    # token_scores_normalized = torch.zeros_like(token_scores)
-    # for class_idx in range(token_scores.shape[0]):
-    #     class_scores = token_scores[class_idx]
-    #     class_min = class_scores.min()
-    #     class_max = class_scores.max()
-    #     token_scores_normalized[class_idx] = (
-    #         2 * (class_scores - class_min) / (class_max - class_min) - 1
-    #     )
+
+    # Clamp scores in the range [-1, 1] for some methods
     if (
         xai_output.xai_method == ExplainerMethod.INTEGRATED_GRADIENT
         or xai_output.xai_method == ExplainerMethod.GRADIENTXINPUT
@@ -214,18 +208,35 @@ def visualize(args, model, tokenizer, data_manager):
 
     class_index = args.class_index or xai_output.predicted_id
 
-    # Prepare tokens for visualization (add underscores etc)
-    from lxt.utils import pdf_heatmap, clean_tokens
-
-    tokens = xai_output.input_tokens
-
     # Postprocess tokens for visualization
+    tokens = xai_output.input_tokens
     if args.model_family == "llama2":
+        # move spaces to the previous token
         for i in range(1, len(tokens)):
             if tokens[i].startswith(" "):
                 tokens[i - 1] += " "
                 tokens[i] = tokens[i].lstrip()
+    elif args.model_family == "llama3":
+        if (
+            xai_output.xai_method == ExplainerMethod.SHAP_PARTITION
+            or xai_output.xai_method == ExplainerMethod.SHAP_PARTITION_TFIDF
+        ):
+            for i in range(1, len(tokens)):
+                if tokens[i].startswith(" "):
+                    tokens[i - 1] += " "
+                    tokens[i] = tokens[i].lstrip()
+        else:
+            cleaned = []
+            for token in tokens:
+                cleaned.append(
+                    token.replace("âĢĻ", "'")
+                    .replace("âĢľ", '"')
+                    .replace("âĢĿ", "”")
+                    .replace("Ġ", "")
+                )
+            tokens = cleaned
 
+    # Prepare tokens for visualization (add underscores etc)
     tokens = clean_tokens(prepare_fixed_bert_tokens_for_pdf_viz(tokens))
 
     emphasize_deviations = (

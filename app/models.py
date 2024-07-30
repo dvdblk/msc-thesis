@@ -1,5 +1,6 @@
 import torch
 
+from peft import PeftModel
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from lxt.models.bert import (
     BertForSequenceClassification as BertForSequenceClassificationLRP,
@@ -47,10 +48,15 @@ def setup_model_and_tokenizer(args):
                 args.model_path,
                 id2label=id2label,
                 label2id=label2id,
-                device_map="auto",
+                # device_map="auto",
                 torch_dtype=torch.bfloat16,
             )
             model.config.pad_token_id = tokenizer.pad_token_id
+
+            if args.model_family == "llama3" or args.model_family == "llama2":
+                # remove lora weights
+                peft_model = PeftModel.from_pretrained(model, model_id=args.model_path)
+                model = peft_model.merge_and_unload()
         else:
             raise ValueError(
                 f"Unsupported model family for AttnLRP: {args.model_family}"
