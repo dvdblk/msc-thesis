@@ -267,29 +267,29 @@ def evaluate(args, model, tokenizer, data_manager):
     log = structlog.get_logger().bind(device=device)
     model = model.to(device)
     explainer = get_explainer(args.method, model, tokenizer, device, args)
-    evaluator = None
 
     # create an array that will store the faithfulness scores
     # it has the shape (n_samples, n_classes, 3 faithfulness scores)
     import numpy as np
-
-    evaluations = np.zeros((len(df), model.num_labels, 3))
-
     from ferret import Benchmark
     from ferret.explainers.explanation import Explanation as FerretExplanation
 
     bench = Benchmark(model, tokenizer)
 
     explanations = []  # (n_samples, n_classes)
-    for i in range(len(df)):
+    evaluations_for_explanations = np.zeros(
+        (len(df), model.num_labels, 3)
+    )  # (n_samples, n_classes, 3)
+
+    for sample_i in tqdm(range(len(df)), desc="Evaluating explanations"):
         # Get abstract by index
-        abstract = df.iloc[i].abstract
+        abstract = df.iloc[sample_i].abstract
         xai_output: XAIOutput = explainer.explain(abstract)
         explanations.append(xai_output)
 
         # Map XAIOutput to FerretExplanation
-        # one FerretExplanation per class (17)
-        ferret_explanations = []
+        # one FerretExplanationEvaluation per class (17)
+        ferret_evaluations_per_class = []
         for class_idx in range(model.num_labels):
             # XAI_outpiut.token_scores is in the shape (n_tokens, n_classes)
             token_scores_array = np.array(xai_output.token_scores)
@@ -301,14 +301,7 @@ def evaluate(args, model, tokenizer, data_manager):
             )
             _token_ids = tokenizer.convert_tokens_to_ids(_tokenized_text)
             decoded_text_from_tokens = tokenizer.decode(_token_ids)
-            # assert (
-            #     decoded_text_from_tokens
-            #     == xai_output.text[: len(decoded_text_from_tokens)]
-            # )
-            print(decoded_text_from_tokens)
-            print(len(xai_output.input_tokens), xai_output.input_tokens)
-            print(len(_tokenized_text), _tokenized_text)
-            # assert xai_output.input_tokens == _tokenized_text
+
             ferret_explanation = FerretExplanation(
                 text=decoded_text_from_tokens,
                 tokens=_tokenized_text,
@@ -316,15 +309,30 @@ def evaluate(args, model, tokenizer, data_manager):
                 explainer=xai_output.xai_method.value,
                 target=class_idx,
             )
-            print(ferret_explanation)
+
             # for each class of a single abstract, get three scores
-            result = bench.evaluate_explanation(
+            evaluation_for_class = bench.evaluate_explanation(
                 ferret_explanation,
                 class_idx,
+                show_progress=False,
                 remove_first_last=False,
             )
-            print(result)
-            return
+            ferret_evaluations_per_class.append(evaluation_for_class)
+
+        # create np array from ferret evaluations per class of size (n_classes, 3)
+        # and store them
+        evaluations_for_explanations[sample_i] = np.array(
+            [
+                list(map(lambda e: e.score, class_eval.evaluation_scores))
+                for class_eval in ferret_evaluations_per_class
+            ]
+        )
+    log.info(
+        "Finished evaluation",
+        method=args.method,
+        evaluation_shape=evaluations_for_explanations.shape,
+    )
+
 
 if __name__ == "__main__":
 
