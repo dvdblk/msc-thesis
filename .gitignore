@@ -12,5 +12,6 @@ venv**/*
 
 .env
 
+**/*.log
 **/*.tex
 **/*.pdf

@@ -289,17 +289,25 @@ def evaluate(args, model, tokenizer, data_manager):
     xai_evaluator = XAIEvaluator(model, tokenizer, device)
     explanations = []
     evaluations_for_explanations = np.zeros((len(df), model.num_labels, 3))
+    log.info("Starting faithfulness evaluation", n_samples=len(df))
 
-    for sample_i in tqdm(range(len(df)), desc="Evaluating explanations"):
+    for sample_i in tqdm(range(20), desc="Evaluating explanations"):
         abstract = df.iloc[sample_i].abstract
         xai_output = explainer.explain(abstract)
         explanations.append(xai_output)
         evaluations_for_explanations[sample_i] = xai_evaluator.evaluate_sample(
             xai_output
         )
+        if args.output_path:
+            xai_evaluator.save_evaluation(
+                evaluations_for_explanations,
+                model_name=args.model_family,
+                xai_method=args.method,
+                base_dir=args.output_path,
+            )
 
     log.info(
-        "Finished evaluation",
+        "Finished faithfulness evaluation",
         method=args.method,
         evaluation_shape=evaluations_for_explanations.shape,
     )

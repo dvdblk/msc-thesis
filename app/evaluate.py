@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 from ferret import Benchmark
 from ferret.explainers.explanation import Explanation as FerretExplanation
@@ -83,3 +85,17 @@ class XAIEvaluator:
             )
 
         return evaluations_for_explanations
+
+    def save_evaluation(
+        self, evaluation_array, model_name, xai_method, base_dir="evaluations"
+    ):
+        # Create directory if it doesn't exist
+        dir_path = os.path.join(base_dir, model_name)
+        os.makedirs(dir_path, exist_ok=True)
+
+        # Generate file name
+        file_name = f"{xai_method}_evaluation.npy"
+        file_path = os.path.join(dir_path, file_name)
+
+        # Save the numpy array
+        np.save(file_path, evaluation_array)
