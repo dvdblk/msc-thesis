@@ -43,7 +43,7 @@ def get_explainer(method_name, model, tokenizer, device, args):
     ExplainerClass = __methods_map[method_name]
     method = ExplainerMethod(method_name)
     # FIXME: change to 1024 with bigger VRAM or add DataParallel
-    max_seq_len = 512 if args.model_family == "scibert" else 512
+    max_seq_len = 16 if args.model_family == "scibert" else 512
 
     if method == ExplainerMethod.SHAP_PARTITION_TFIDF:
         # pad the end of TFIDF mask in case the model is 'scibert'

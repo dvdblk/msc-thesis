@@ -1,0 +1,8 @@
+[submodule "ferret"]
+	path = ferret
+	url = https://github.com/dvdblk/ferret.git
+	branch = main_fixed
+[submodule "LRP-eXplains-Transformers"]
+	path = LRP-eXplains-Transformers
+	url = https://github.com/dvdblk/LRP-eXplains-Transformers.git
+	branch = main

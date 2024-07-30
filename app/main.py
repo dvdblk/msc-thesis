@@ -6,6 +6,7 @@ import traceback
 
 import torch
 import torch.multiprocessing as mp
+import numpy as np
 
 import structlog
 from tqdm import tqdm
@@ -22,6 +23,7 @@ from app.explainers import (
 )
 from app.data.enum import DataSource
 from app.explainers.model import XAIOutput, ExplainerMethod
+from app.evaluate import XAIEvaluator
 from app.data.manager import QdrantManager, LocalManager
 
 configure_structlog()
@@ -258,34 +260,8 @@ def visualize(args, model, tokenizer, data_manager):
     log.info("Visualization saved", predicted_label=xai_output.predicted_label)
 
     # Faithfulness evaluation
-    from ferret import Benchmark
-    from ferret.explainers.explanation import Explanation as FerretExplanation
-    import numpy as np
-
-    bench = Benchmark(model, tokenizer)
-
-    _tokenized_text = tokenizer.tokenize(
-        xai_output.text,
-        max_length=len(xai_output.input_tokens),
-        add_special_tokens=True,
-    )
-    _token_ids = tokenizer.convert_tokens_to_ids(_tokenized_text)
-    decoded_text_from_tokens = tokenizer.decode(_token_ids)
-
-    ferret_explanation = FerretExplanation(
-        text=decoded_text_from_tokens,
-        tokens=_tokenized_text,
-        scores=np.array(xai_output.token_scores)[:, class_index],
-        explainer=xai_output.xai_method.value,
-        target=class_index,
-    )
-
-    evaluation = bench.evaluate_explanation(
-        ferret_explanation,
-        class_index,
-        show_progress=False,
-        remove_first_last=False,
-    )
+    xai_evaluator = XAIEvaluator(model, tokenizer, device)
+    evaluation = xai_evaluator.evaluate_explanation(xai_output, class_index)
 
     # Create a dictionary with rounded scores
     faithfulness_scores = {
@@ -310,71 +286,23 @@ def evaluate(args, model, tokenizer, data_manager):
     model = model.to(device)
     explainer = get_explainer(args.method, model, tokenizer, device, args)
 
-    # create an array that will store the faithfulness scores
-    # it has the shape (n_samples, n_classes, 3 faithfulness scores)
-    import numpy as np
-    from ferret import Benchmark
-    from ferret.explainers.explanation import Explanation as FerretExplanation
-
-    bench = Benchmark(model, tokenizer)
-
-    explanations = []  # (n_samples, n_classes)
-    evaluations_for_explanations = np.zeros(
-        (len(df), model.num_labels, 3)
-    )  # (n_samples, n_classes, 3)
+    xai_evaluator = XAIEvaluator(model, tokenizer, device)
+    explanations = []
+    evaluations_for_explanations = np.zeros((len(df), model.num_labels, 3))
 
     for sample_i in tqdm(range(len(df)), desc="Evaluating explanations"):
-        # Get abstract by index
         abstract = df.iloc[sample_i].abstract
-        xai_output: XAIOutput = explainer.explain(abstract)
+        xai_output = explainer.explain(abstract)
         explanations.append(xai_output)
-
-        # Map XAIOutput to FerretExplanation
-        # one FerretExplanationEvaluation per class (17)
-        ferret_evaluations_per_class = []
-        for class_idx in range(model.num_labels):
-            # XAI_outpiut.token_scores is in the shape (n_tokens, n_classes)
-            token_scores_array = np.array(xai_output.token_scores)
-            # tokenize the original text to length of current tokens
-            _tokenized_text = tokenizer.tokenize(
-                xai_output.text,
-                max_length=len(xai_output.input_tokens),
-                add_special_tokens=True,
-            )
-            _token_ids = tokenizer.convert_tokens_to_ids(_tokenized_text)
-            decoded_text_from_tokens = tokenizer.decode(_token_ids)
-
-            ferret_explanation = FerretExplanation(
-                text=decoded_text_from_tokens,
-                tokens=_tokenized_text,
-                scores=token_scores_array[:, class_idx],
-                explainer=xai_output.xai_method.value,
-                target=class_idx,
-            )
-
-            # for each class of a single abstract, get three scores
-            evaluation_for_class = bench.evaluate_explanation(
-                ferret_explanation,
-                class_idx,
-                show_progress=False,
-                remove_first_last=False,
-            )
-            ferret_evaluations_per_class.append(evaluation_for_class)
-
-        # create np array from ferret evaluations per class of size (n_classes, 3)
-        # and store them
-        evaluations_for_explanations[sample_i] = np.array(
-            [
-                list(map(lambda e: e.score, class_eval.evaluation_scores))
-                for class_eval in ferret_evaluations_per_class
-            ]
+        evaluations_for_explanations[sample_i] = xai_evaluator.evaluate_sample(
+            xai_output
         )
+
     log.info(
         "Finished evaluation",
         method=args.method,
         evaluation_shape=evaluations_for_explanations.shape,
     )
-
 
 if __name__ == "__main__":
 

@@ -12,13 +12,16 @@ evaluate
 sentencepiece
 datasets
 lime
-lxt==0.6.0
+# LXT 0.6.0 with fixes
+git+https://github.com/dvdblk/LRP-eXplains-Transformers.git@main#egg=lxt
 wandb
 inseq[notebook]
-ferret-xai==0.4.2
+# Ferret 0.4.1 with fixes
+git+https://github.com/dvdblk/ferret.git@main_fixed#egg=ferret-xai
 ipywidgets
 python-dotenv
 structlog
 qdrant-client
+
 --extra-index-url https://download.pytorch.org/whl/cu118
 torch

@@ -96,7 +96,7 @@ evaluate==0.4.2
     # via -r requirements.in
 executing==2.0.1
     # via stack-data
-ferret-xai==0.4.1
+ferret-xai @ git+https://github.com/dvdblk/ferret.git@main_fixed
     # via -r requirements.in
 filelock==3.14.0
     # via
@@ -211,7 +211,7 @@ lime==0.2.0.1
     #   ferret-xai
 llvmlite==0.42.0
     # via numba
-lxt==0.6.0
+lxt @ git+https://github.com/dvdblk/LRP-eXplains-Transformers.git@main
     # via -r requirements.in
 marisa-trie==1.1.1
     # via language-data

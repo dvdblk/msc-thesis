@@ -4,12 +4,11 @@ from ferret.explainers.explanation import Explanation as FerretExplanation
 from ferret.evaluators.evaluation import (
     ExplanationEvaluation as FerretExplanationEvaluation,
 )
-import torch
 
 
 class XAIEvaluator:
     """
-    A class for evaluating XAI explanations using the Ferret library.
+    A class for evaluating XAI explanations for faithfulness using the Ferret library.
     """
 
     def __init__(self, model, tokenizer, device):
@@ -73,7 +72,7 @@ class XAIEvaluator:
 
         Returns:
             A numpy array of shape (num_labels, 3) containing evaluation scores for each class.
-            In the order: aopc_compr, aopc_suff, taucorr_loo
+            Scores in the order: aopc_compr, aopc_suff, taucorr_loo
         """
         evaluations_for_explanations = np.zeros((self.model.num_labels, 3))
 
