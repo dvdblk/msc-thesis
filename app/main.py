@@ -216,7 +216,7 @@ def visualize(args, model, tokenizer, data_manager):
             if tokens[i].startswith(" "):
                 tokens[i - 1] += " "
                 tokens[i] = tokens[i].lstrip()
-    elif args.model_family == "llama3":
+    elif args.model_family == "llama3" or args.model_family == "unllama3":
         if (
             xai_output.xai_method == ExplainerMethod.SHAP_PARTITION
             or xai_output.xai_method == ExplainerMethod.SHAP_PARTITION_TFIDF
