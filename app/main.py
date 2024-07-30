@@ -195,7 +195,23 @@ def visualize(args, model, tokenizer, data_manager):
     xai_output: XAIOutput = explainer.explain(abstract)
 
     # Turn tokens scores into a tensor and transpose
+    # token_scores is now of shape (num_classes, num_tokens)
     token_scores = torch.tensor(xai_output.token_scores).transpose(0, 1)
+    # Normalize token scores per class
+    # token_scores_normalized = torch.zeros_like(token_scores)
+    # for class_idx in range(token_scores.shape[0]):
+    #     class_scores = token_scores[class_idx]
+    #     class_min = class_scores.min()
+    #     class_max = class_scores.max()
+    #     token_scores_normalized[class_idx] = (
+    #         2 * (class_scores - class_min) / (class_max - class_min) - 1
+    #     )
+    if (
+        xai_output.xai_method == ExplainerMethod.INTEGRATED_GRADIENT
+        or xai_output.xai_method == ExplainerMethod.GRADIENTXINPUT
+    ):
+        token_scores = torch.clamp(token_scores, min=-1.0, max=1.0)
+
     class_index = args.class_index or xai_output.predicted_id
 
     # Prepare tokens for visualization (add underscores etc)

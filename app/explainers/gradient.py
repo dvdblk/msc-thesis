@@ -61,7 +61,7 @@ class GradientExplainer(BaseExplainer):
 class IntegratedGradientExplainer(BaseExplainer):
 
     def __init__(
-        self, model, tokenizer, device, multiply_by_inputs=True, use_all_gpus=True
+        self, model, tokenizer, device, multiply_by_inputs=True, use_all_gpus=False
     ):
         super().__init__(
             model, tokenizer, device, xai_method=ExplainerMethod.INTEGRATED_GRADIENT
@@ -118,18 +118,14 @@ class IntegratedGradientExplainer(BaseExplainer):
                 input_embeds,
                 baselines=baselines,
                 target=class_idx,
-                n_steps=15,
+                n_steps=50,
+                internal_batch_size=2,
             )
             attr = attr.sum(-1)  # Pool over hidden size
             attr_all.append(attr)
 
         # Stack the attributions for all classes
         attr_all = torch.stack(attr_all, dim=1)
-
-        # Normalize attr_all to range [-1, 1]
-        attr_min = attr_all.min()
-        attr_max = attr_all.max()
-        attr_all_normalized = 2 * (attr_all - attr_min) / (attr_max - attr_min) - 1
 
         logits = self._predictor_func(input_embeds)
         predicted_id = logits.argmax(dim=-1).item()
@@ -139,12 +135,13 @@ class IntegratedGradientExplainer(BaseExplainer):
         tokens = self.tokenizer.convert_ids_to_tokens(inputs.input_ids[0])
         tokens = fix_bert_tokenization(tokens)
 
-        attr_all_normalized = attr_all_normalized.squeeze(0).transpose(0, 1)
+        # get to the correct shape expected by the visualize method ...
+        attr_all = attr_all.squeeze(0).transpose(0, 1)
 
         return XAIOutput(
             text=abstract,
             input_tokens=tokens,
-            token_scores=attr_all_normalized.cpu().tolist(),
+            token_scores=attr_all.cpu().tolist(),
             predicted_id=predicted_id,
             predicted_label=predicted_label,
             probabilities=probabilities,
