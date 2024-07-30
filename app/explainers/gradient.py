@@ -9,9 +9,9 @@ from app.utils.tokenization import fix_bert_tokenization
 
 class GradientExplainer(BaseExplainer):
 
-    def __init__(self, model, tokenizer, device, multiply_by_inputs=True):
+    def __init__(self, model, tokenizer, device, max_seq_len, multiply_by_inputs=True):
         xai_method = ExplainerMethod.GRADIENTXINPUT
-        super().__init__(model, tokenizer, device, xai_method=xai_method)
+        super().__init__(model, tokenizer, device, max_seq_len, xai_method=xai_method)
         self.multiply_by_inputs = multiply_by_inputs
 
     def _predictor_func(self, input_embeds):
@@ -20,7 +20,11 @@ class GradientExplainer(BaseExplainer):
 
     def explain(self, abstract):
         inputs = self.tokenizer(
-            abstract, max_length=512, padding=True, truncation=True, return_tensors="pt"
+            abstract,
+            max_length=self.max_seq_len,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
         ).to(self.device)
         input_embeds = self.model.get_input_embeddings()(inputs.input_ids)
 
@@ -61,10 +65,20 @@ class GradientExplainer(BaseExplainer):
 class IntegratedGradientExplainer(BaseExplainer):
 
     def __init__(
-        self, model, tokenizer, device, multiply_by_inputs=True, use_all_gpus=False
+        self,
+        model,
+        tokenizer,
+        device,
+        max_seq_len,
+        multiply_by_inputs=True,
+        use_all_gpus=False,
     ):
         super().__init__(
-            model, tokenizer, device, xai_method=ExplainerMethod.INTEGRATED_GRADIENT
+            model,
+            tokenizer,
+            device,
+            max_seq_len,
+            xai_method=ExplainerMethod.INTEGRATED_GRADIENT,
         )
         self.multiply_by_inputs = multiply_by_inputs
         self.use_all_gpus = use_all_gpus
@@ -99,7 +113,11 @@ class IntegratedGradientExplainer(BaseExplainer):
 
     def explain(self, abstract):
         inputs = self.tokenizer(
-            abstract, max_length=512, padding=True, truncation=True, return_tensors="pt"
+            abstract,
+            max_length=self.max_seq_len,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
         ).to(self.devices[0])
         input_embeds = self.model.get_input_embeddings()(inputs.input_ids)
 

@@ -91,8 +91,10 @@ class TFIDFTextMasker(shap.maskers.Text):
 
 class ShapExplainer(BaseExplainer):
 
-    def __init__(self, model, tokenizer, device, xai_method, algorithm, masker=None):
-        super().__init__(model, tokenizer, device, xai_method=xai_method)
+    def __init__(
+        self, model, tokenizer, device, max_seq_len, xai_method, algorithm, masker=None
+    ):
+        super().__init__(model, tokenizer, device, max_seq_len, xai_method=xai_method)
         # Set the explainer for SHAP subclasses
         self.explainer = shap.Explainer(
             self._predictor_func,
@@ -103,12 +105,11 @@ class ShapExplainer(BaseExplainer):
 
     def _predictor_func(self, text):
         """Predictor function that SHAP uses while explaining"""
-        # TODO: this could/should probably be model dependent? but works with SciBERT for now
         inputs = self.tokenizer(
             text.tolist(),
             padding=True,
             truncation=True,
-            max_length=512,  # FIXME: this should be model dependent, SciBERT is 512
+            max_length=self.max_seq_len,
             return_tensors="pt",
         ).to(self.device)
 
@@ -152,31 +153,41 @@ class ShapExplainer(BaseExplainer):
 
 
 class PartitionShapExplainer(ShapExplainer):
-    def __init__(self, model, tokenizer, device):
+
+    def __init__(self, model, tokenizer, device, max_seq_len):
         super().__init__(
             model,
             tokenizer,
             device,
             xai_method=ExplainerMethod.SHAP_PARTITION,
             algorithm="partition",
+            max_seq_len=max_seq_len,
         )
 
 
 class KernelShapExplainer(ShapExplainer):
-    def __init__(self, model, tokenizer, device):
+
+    def __init__(self, model, tokenizer, device, max_seq_len):
         super().__init__(
             model,
             tokenizer,
             device,
             xai_method=ExplainerMethod.SHAP_KERNEL,
             algorithm="kernel",
+            max_seq_len=max_seq_len,
         )
 
 
 class TfIdfPartitionShapExplainer(ShapExplainer):
 
     def __init__(
-        self, tf_idf_data_path, should_pad_end_of_mask, model, tokenizer, device
+        self,
+        tf_idf_data_path,
+        should_pad_end_of_mask,
+        model,
+        tokenizer,
+        device,
+        max_seq_len,
     ):
         # Load OSDG data
         osdg_data = pd.read_csv(tf_idf_data_path)
@@ -193,4 +204,5 @@ class TfIdfPartitionShapExplainer(ShapExplainer):
                 tokenizer=tokenizer,
                 threshold=0.06,
             ),
+            max_seq_len=max_seq_len,
         )

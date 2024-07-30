@@ -9,8 +9,12 @@ from app.utils.tokenization import fix_bert_tokenization
 
 class LimeExplainer(BaseExplainer):
 
-    def __init__(self, model, tokenizer, device, num_samples=650, max_samples=3000):
-        super().__init__(model, tokenizer, device, xai_method=ExplainerMethod.LIME)
+    def __init__(
+        self, model, tokenizer, device, max_seq_len, num_samples=650, max_samples=3000
+    ):
+        super().__init__(
+            model, tokenizer, device, max_seq_len, xai_method=ExplainerMethod.LIME
+        )
         self.num_samples = num_samples
         self.max_samples = max_samples
         self.lime_explainer = LimeTextExplainer(
@@ -24,7 +28,7 @@ class LimeExplainer(BaseExplainer):
                 text,
                 padding=True,
                 truncation=True,
-                max_length=512,
+                max_length=self.max_seq_len,
                 return_tensors="pt",
             ).to(self.device)
 

@@ -5,10 +5,11 @@ from app.explainers.model import XAIOutput
 class BaseExplainer(ABC):
     """Base class for any XAI method that provides explanations for a model prediction / decision"""
 
-    def __init__(self, model, tokenizer, device, xai_method):
+    def __init__(self, model, tokenizer, device, max_seq_len, xai_method):
         self.model = model
         self.tokenizer = tokenizer
         self.device = device
+        self.max_seq_len = max_seq_len
         self.xai_method = xai_method
 
     @abstractmethod

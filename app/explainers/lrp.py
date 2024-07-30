@@ -10,7 +10,7 @@ from app.utils.tokenization import fix_bert_tokenization
 
 class LRPExplainer(BaseExplainer):
 
-    def __init__(self, model_family, model, tokenizer, device, xai_method):
+    def __init__(self, model_family, model, tokenizer, device, max_seq_len, xai_method):
         """
         Args:
             model_family (str): Model family (e.g. "bert", "llama2", ...)
@@ -18,12 +18,16 @@ class LRPExplainer(BaseExplainer):
             tokenizer (transformers.PreTrainedTokenizer): Tokenizer
             device (torch.device): Device
         """
-        super().__init__(model, tokenizer, device, xai_method=xai_method)
+        super().__init__(model, tokenizer, device, max_seq_len, xai_method=xai_method)
         self.model_family = model_family
 
     def explain(self, abstract):
         input_ids = self.tokenizer(
-            abstract, max_length=512, padding=True, truncation=True, return_tensors="pt"
+            abstract,
+            max_length=self.max_seq_len,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
         ).input_ids.to(self.device)
 
         if self.model_family == "scibert":
@@ -85,7 +89,7 @@ class AttnLRPExplainer(LRPExplainer):
         Modifies model internals with LRP rules (can't use for training)
     """
 
-    def __init__(self, model_family, model, tokenizer, device):
+    def __init__(self, model_family, model, tokenizer, device, max_seq_len):
         # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_attnlrp.register(model)
@@ -98,7 +102,12 @@ class AttnLRPExplainer(LRPExplainer):
         else:
             raise ValueError(f"Unsupported model family for AttnLRP: {model_family}")
         super().__init__(
-            model_family, model, tokenizer, device, xai_method=ExplainerMethod.ATTNLRP
+            model_family,
+            model,
+            tokenizer,
+            device,
+            max_seq_len=max_seq_len,
+            xai_method=ExplainerMethod.ATTNLRP,
         )
 
 
@@ -109,7 +118,7 @@ class CPLRPExplainer(LRPExplainer):
         Modifies model internals with LRP rules (can't use for training)
     """
 
-    def __init__(self, model_family, model, tokenizer, device):
+    def __init__(self, model_family, model, tokenizer, device, max_seq_len):
         # TODO: remove LoRA layers if needed by merge_and_unload
         if model_family == "scibert":
             bert_cplrp.register(model)
@@ -122,5 +131,10 @@ class CPLRPExplainer(LRPExplainer):
         else:
             raise ValueError(f"Unsupported model family for CPLRP: {model_family}")
         super().__init__(
-            model_family, model, tokenizer, device, xai_method=ExplainerMethod.CPLRP
+            model_family,
+            model,
+            tokenizer,
+            device,
+            max_seq_len=max_seq_len,
+            xai_method=ExplainerMethod.CPLRP,
         )

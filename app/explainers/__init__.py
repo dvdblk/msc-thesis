@@ -42,15 +42,22 @@ def get_explainer(method_name, model, tokenizer, device, args):
 
     ExplainerClass = __methods_map[method_name]
     method = ExplainerMethod(method_name)
+    # FIXME: change to 1024 with bigger VRAM or add DataParallel
+    max_seq_len = 512 if args.model_family == "scibert" else 512
 
     if method == ExplainerMethod.SHAP_PARTITION_TFIDF:
         # pad the end of TFIDF mask in case the model is 'scibert'
         should_pad_end_of_mask = args.model_family == "scibert"
 
         return ExplainerClass(
-            args.tfidf_corpus_path, should_pad_end_of_mask, model, tokenizer, device
+            args.tfidf_corpus_path,
+            should_pad_end_of_mask,
+            model,
+            tokenizer,
+            device,
+            max_seq_len,
         )
     elif method == ExplainerMethod.ATTNLRP or method == ExplainerMethod.CPLRP:
-        return ExplainerClass(args.model_family, model, tokenizer, device)
+        return ExplainerClass(args.model_family, model, tokenizer, device, max_seq_len)
     else:
-        return ExplainerClass(model, tokenizer, device)
+        return ExplainerClass(model, tokenizer, device, max_seq_len)
