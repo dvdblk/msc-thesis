@@ -45,6 +45,7 @@ class XAIEvaluator:
             max_length=len(xai_output.input_tokens),
             add_special_tokens=True,
         )
+
         _token_ids = self.tokenizer.convert_tokens_to_ids(_tokenized_text)
         decoded_text_from_tokens = self.tokenizer.decode(_token_ids)
 
@@ -99,3 +100,11 @@ class XAIEvaluator:
 
         # Save the numpy array
         np.save(file_path, evaluation_array)
+
+    def load_evaluation(self, model_name, xai_method, base_dir="evaluations"):
+        # Generate file name
+        file_name = f"{xai_method}_evaluation.npy"
+        file_path = os.path.join(base_dir, model_name, file_name)
+
+        # Load the numpy array
+        return np.load(file_path)

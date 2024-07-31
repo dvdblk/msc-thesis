@@ -15,7 +15,10 @@ from queue import Empty as QueueEmptyException
 from lxt.utils import pdf_heatmap, clean_tokens
 from app.utils import configure_structlog
 from app.utils.enum_action import EnumAction
-from app.utils.tokenization import prepare_fixed_bert_tokens_for_pdf_viz
+from app.utils.tokenization import (
+    prepare_fixed_bert_tokens_for_pdf_viz,
+    truncate_to_bert_limit,
+)
 from app.models import setup_model_and_tokenizer, get_model_names_list
 from app.explainers import (
     get_xai_method_names_list,
@@ -180,19 +183,19 @@ def explain(args, model, tokenizer, data_manager):
 
     log.info("Exiting...")
 
-
 def visualize(args, model, tokenizer, data_manager):
     # Load data into a DataFrame
     df = data_manager.load_data()
-
-    # Get abstract by index and explanation
-    abstract = df.iloc[args.index].abstract
 
     # Get one gpu if available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     log = structlog.get_logger().bind(device=device)
     model = model.to(device)
     explainer = get_explainer(args.method, model, tokenizer, device, args)
+
+    # Get abstract by index and explanation
+    abstract = df.iloc[args.index].abstract
+    abstract = truncate_to_bert_limit(abstract, tokenizer)
 
     # Produce explanation
     xai_output: XAIOutput = explainer.explain(abstract)
@@ -277,9 +280,6 @@ def visualize(args, model, tokenizer, data_manager):
 
 
 def evaluate(args, model, tokenizer, data_manager):
-    # Load data into a DataFrame
-    df = data_manager.load_data()
-
     # Model + explainer setup
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     log = structlog.get_logger().bind(device=device)
@@ -287,12 +287,36 @@ def evaluate(args, model, tokenizer, data_manager):
     explainer = get_explainer(args.method, model, tokenizer, device, args)
 
     xai_evaluator = XAIEvaluator(model, tokenizer, device)
+
+    # Load data into a DataFrame
+    df = data_manager.load_data()
+
+    evaluations_for_explanations, start_index = None, args.start_index or 0
+
+    # check if starting index exists
+    if args.start_index is not None:
+        # validate start index
+        assert args.start_index >= 0, "Start index must be greater than or equal to 0"
+        assert args.start_index < len(
+            df
+        ), "Start index must be less than the number of samples"
+
+        # load previous data
+        evaluations_for_explanations = xai_evaluator.load_evaluation(
+            model_name=args.model_family,
+            xai_method=args.method,
+            base_dir=args.output_path,
+        )
+    else:
+        evaluations_for_explanations = np.zeros((len(df), model.num_labels, 3))
+
     explanations = []
-    evaluations_for_explanations = np.zeros((len(df), model.num_labels, 3))
+
     log.info("Starting faithfulness evaluation", n_samples=len(df))
 
-    for sample_i in tqdm(range(len(df)), desc="Evaluating explanations"):
+    for sample_i in tqdm(range(start_index, len(df)), desc="Evaluating explanations"):
         abstract = df.iloc[sample_i].abstract
+        abstract = truncate_to_bert_limit(abstract, tokenizer)
         xai_output = explainer.explain(abstract)
         explanations.append(xai_output)
         evaluations_for_explanations[sample_i] = xai_evaluator.evaluate_sample(
@@ -311,6 +335,7 @@ def evaluate(args, model, tokenizer, data_manager):
         method=args.method,
         evaluation_shape=evaluations_for_explanations.shape,
     )
+
 
 if __name__ == "__main__":
 
@@ -402,6 +427,12 @@ if __name__ == "__main__":
     )
 
     evaluate_parser = subparsers.add_parser("evaluate", help="Evaluate explanations")
+    evaluate_parser.add_argument(
+        "--start-index",
+        help="Index of the first publication to evaluate (continue from), 0-indexed.",
+        default=None,
+        type=int,
+    )
 
     args = parser.parse_args()
 

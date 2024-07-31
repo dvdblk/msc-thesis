@@ -56,3 +56,28 @@ def prepare_fixed_bert_tokens_for_pdf_viz(tokens):
             tokens[i - 1] = tokens[i - 1].rstrip()
 
     return tokens
+
+
+def truncate_to_bert_limit(text, tokenizer, max_tokens=510):
+    # Tokenize without truncation
+    encoded = tokenizer.encode_plus(
+        text,
+        add_special_tokens=True,
+        max_length=None,
+        return_tensors="pt",
+        return_offsets_mapping=True,
+        padding=False,
+        truncation=False,
+    )
+
+    # Get the offsets mapping
+    offsets = encoded["offset_mapping"][0]
+
+    # Find the character position corresponding to the 510th token
+    if len(offsets) > max_tokens:
+        truncation_char_index = offsets[max_tokens - 1][1].item()
+        truncated_text = text[:truncation_char_index]
+    else:
+        truncated_text = text
+
+    return truncated_text
