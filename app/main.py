@@ -265,21 +265,22 @@ def visualize(args, model, tokenizer, data_manager):
     del token_scores
     torch.cuda.empty_cache()
 
-    # Faithfulness evaluation
-    xai_evaluator = XAIEvaluator(model, tokenizer, device)
-    evaluation = xai_evaluator.evaluate_explanation(xai_output, class_index)
+    if args.evaluate:
+        # Faithfulness evaluation
+        xai_evaluator = XAIEvaluator(model, tokenizer, device)
+        evaluation = xai_evaluator.evaluate_explanation(xai_output, class_index)
 
-    # Create a dictionary with rounded scores
-    faithfulness_scores = {
-        e.name: round(e.score, 4) for e in evaluation.evaluation_scores
-    }
+        # Create a dictionary with rounded scores
+        faithfulness_scores = {
+            e.name: round(e.score, 4) for e in evaluation.evaluation_scores
+        }
 
-    # Log the faithfulness scores as a single dictionary
-    log.info(
-        "Completed evaluating for faithfulness of explanation.",
-        faithfulness_scores=faithfulness_scores,
-        predicted_label=xai_output.predicted_label,
-    )
+        # Log the faithfulness scores as a single dictionary
+        log.info(
+            "Completed evaluating for faithfulness of explanation.",
+            faithfulness_scores=faithfulness_scores,
+            predicted_label=xai_output.predicted_label,
+        )
 
 
 def evaluate(args, model, tokenizer, data_manager):
@@ -396,7 +397,7 @@ if __name__ == "__main__":
     # Add subparsers for different actions ('explain', 'visualize', 'evaluate')
     subparsers = parser.add_subparsers(dest="action", required=True)
 
-    # 'Explain' action
+    # 'Explain' action / mode
     explain_parser = subparsers.add_parser(
         "explain", help="Explain predictions on given abstracts."
     )
@@ -413,6 +414,7 @@ if __name__ == "__main__":
         default=100,
     )
 
+    # 'Visualize' action / mode
     visualize_parser = subparsers.add_parser(
         "visualize", help="Visualize explanations into a pdf file."
     )
@@ -428,7 +430,13 @@ if __name__ == "__main__":
         type=int,
         default=None,
     )
+    visualize_parser.add_argument(
+        "--evaluate",
+        help="If set, evaluate faithfulness of the explanation after visualization.",
+        action="store_true",
+    )
 
+    # 'Evaluate' action / mode
     evaluate_parser = subparsers.add_parser("evaluate", help="Evaluate explanations")
     evaluate_parser.add_argument(
         "--start-index",
