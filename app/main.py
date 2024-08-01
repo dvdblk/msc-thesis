@@ -261,6 +261,9 @@ def visualize(args, model, tokenizer, data_manager):
     )
 
     log.info("Visualization saved", predicted_label=xai_output.predicted_label)
+    # Free up memory after visualization
+    del token_scores
+    torch.cuda.empty_cache()
 
     # Faithfulness evaluation
     xai_evaluator = XAIEvaluator(model, tokenizer, device)
