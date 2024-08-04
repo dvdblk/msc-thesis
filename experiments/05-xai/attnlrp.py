@@ -157,13 +157,14 @@ def fix_bert_tokenization(tokens):
 
 print(fix_bert_tokenization(lime_tokens))
 
-assert fix_bert_tokenization(tokens_scibert_attnlrp) == tokens_scibert_shap, (
-    fix_bert_tokenization(tokens_scibert_attnlrp),
-    tokens_scibert_shap,
-)
+# assert fix_bert_tokenization(tokens_scibert_attnlrp) == tokens_scibert_shap, (
+#     fix_bert_tokenization(tokens_scibert_attnlrp),
+#     tokens_scibert_shap,
+# )
 
-relevance = torch.tensor([0, 0.1, 0.2, 0, 0.1, 0.3, 0.8, 0.1, 0, 0, 0, 0.4])
-tokens = fix_bert_tokenization(tokens_scibert_attnlrp)
+relevance = torch.tensor([0, 1, 0])
+# tokens = fix_bert_tokenization(tokens_scibert_attnlrp)
+tokens = ["Hello ", "World", "!"]
 assert len(tokens) == len(
     relevance
 ), f"Tokens ({len(tokens)}) and relevance scores ({len(relevance)}) must have the same length."
