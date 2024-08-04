@@ -280,6 +280,9 @@ def visualize(args, model, tokenizer, data_manager):
             "Completed evaluating for faithfulness of explanation.",
             faithfulness_scores=faithfulness_scores,
             predicted_label=xai_output.predicted_label,
+            model_family=args.model_family,
+            method=xai_output.xai_method.value,
+            sample_index=args.index,
         )
 
 
