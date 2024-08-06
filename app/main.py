@@ -251,12 +251,20 @@ def visualize(args, model, tokenizer, data_manager):
     # Create visualization and save it
     from app.utils.sdg import get_sdg_colormap
 
+    # check if args.output_path is a directory
+    output_path = args.output_path
+    if os.path.isdir(output_path):
+        output_path = os.path.join(
+            output_path,
+            f"{args.index}_{args.model_family}_{xai_output.xai_method.value}.pdf",
+        )
+
     pdf_heatmap(
         tokens,
         token_scores[class_index],
         cmap=get_sdg_colormap(class_index + 1),
         emphasize_deviations=emphasize_deviations,
-        path=args.output_path,
+        path=output_path,
         backend="xelatex",
     )
 
