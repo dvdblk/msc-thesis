@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from app.explainers.model import XAIOutput
+from sdgrs_xai.explainers.model import XAIOutput
 
 
 class BaseExplainer(ABC):

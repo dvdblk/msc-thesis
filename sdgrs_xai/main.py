@@ -2,7 +2,6 @@ import argparse
 import time
 import os
 import sys
-import traceback
 
 import torch
 import torch.multiprocessing as mp
@@ -13,21 +12,21 @@ from tqdm import tqdm
 
 from queue import Empty as QueueEmptyException
 from lxt.utils import pdf_heatmap, clean_tokens
-from app.utils import configure_structlog
-from app.utils.enum_action import EnumAction
-from app.utils.tokenization import (
+from sdgrs_xai.utils import configure_structlog
+from sdgrs_xai.utils.enum_action import EnumAction
+from sdgrs_xai.utils.tokenization import (
     prepare_fixed_bert_tokens_for_pdf_viz,
     truncate_to_bert_limit,
 )
-from app.models import setup_model_and_tokenizer, get_model_names_list
-from app.explainers import (
+from sdgrs_xai.models import setup_model_and_tokenizer, get_model_names_list
+from sdgrs_xai.explainers import (
     get_xai_method_names_list,
     get_explainer,
 )
-from app.data.enum import DataSource
-from app.explainers.model import XAIOutput, ExplainerMethod
-from app.evaluate import XAIEvaluator
-from app.data.manager import QdrantManager, LocalManager
+from sdgrs_xai.data import DataSource
+from sdgrs_xai.explainers.model import XAIOutput, ExplainerMethod
+from sdgrs_xai.evaluate import XAIEvaluator
+from sdgrs_xai.data.manager import QdrantManager, LocalManager
 
 configure_structlog()
 log = structlog.get_logger()
@@ -58,21 +57,21 @@ def worker_function(task_queue, result_queue, model, tokenizer, args):
             break
         log.debug("Got publications", n_publications=len(publications))
 
-        for publication in publications:
-            preprocessed_abstract = ""
-            if publication.title is not None:
-                preprocessed_abstract += publication.title + " "
-            preprocessed_abstract += publication.abstract
+        for publication in publications.iterrows():
+            publication = publication[1]
+            # preprocessed_abstract = ""
+            # if publication.title is not None:
+            #     preprocessed_abstract += publication.title + " "
+            # preprocessed_abstract += publication.abstract
 
             try:
                 # Get the explanation
-                xai_output: XAIOutput = explainer.explain(preprocessed_abstract)
+                xai_output: XAIOutput = explainer.explain(publication.abstract)
                 result_queue.put((publication, xai_output))
-                log.debug("Processed abstract", publication_id=publication.zora_id)
+                log.debug("Processed abstract", publication_id=publication.id)
 
             except Exception as e:
-                log.error(f"Error processing abstract {publication.zora_id}: {str(e)}")
-                log.error(traceback.format_exc())
+                log.exception(f"Error processing abstract {publication.id}: {str(e)}")
                 result_queue.put((publication, None))
 
 
@@ -102,24 +101,29 @@ def explain(args, model, tokenizer, data_manager):
 
         def queue_publications(chunk_size=20):
             nonlocal total_queued
+            nonlocal n_publications
             while task_queue.qsize() * args.batch_size < queue_high_water_mark:
-                publications = data_manager.load_data()
+                publications = data_manager.load_input_data()
                 if publications is None:
                     return False
-                for i in range(0, len(publications), chunk_size):
+                n_pubs = n_publications or len(publications)
+                total = 0
+                for i in range(0, min(len(publications), n_pubs), chunk_size):
                     chunk = publications[i : i + chunk_size]
+                    total += len(chunk)
                     task_queue.put(chunk)
 
-                n_pubs = len(publications)
-                total_queued += n_pubs
+                total_queued += total
                 log.debug(
                     "Queued more publications",
-                    n_added=n_pubs,
+                    n_added=total,
                     total_queued=total_queued,
                 )
+            if n_publications is None:
+                n_publications = len(publications)
             return True
 
-        log.info("Starting to process abstracts")
+        log.info("Starting to process documents")
         # sleep for a short while to avoid tqdm output bug
         time.sleep(2)
         queue_publications()
@@ -133,8 +137,8 @@ def explain(args, model, tokenizer, data_manager):
                 total_processed < total_queued or total_queued < n_publications
             ):
                 # # Check if we need to queue more publications
-                # if task_queue.qsize() * batch_size <= queue_low_water_mark:
-                #     if not queue_publications_with_label():
+                # if task_queue.qsize() * args.batch_size <= queue_low_water_mark:
+                #     if not queue_publications():
                 #         # No more publications to queue
                 #         if task_queue.empty() and total_processed > 0:
                 #             break
@@ -144,15 +148,13 @@ def explain(args, model, tokenizer, data_manager):
                     if result is not None:
                         publication, xai_output = result
                         if xai_output is not None:
-                            data_manager.store_data(
+                            data_manager.add_result(
                                 publication=publication,
-                                xai_output=xai_output,
-                                model_family=args.model_family,
-                                model_path=args.model_path,
+                                xai_output=xai_output
                             )
                             log.debug(
                                 "Created XAI for abstract",
-                                id=publication.zora_id,
+                                id=publication.id,
                             )
                         total_processed += 1
 
@@ -161,8 +163,10 @@ def explain(args, model, tokenizer, data_manager):
                         pbar.update(1)
 
                         if total_processed % 100 == 0:
+                            # Store data every 100 processed publications
+                            data_manager.store_data()
                             log.info(
-                                f"Progress update",
+                                "Progress update",
                                 total_processed=total_processed,
                                 total_queued=total_queued,
                             )
@@ -175,8 +179,8 @@ def explain(args, model, tokenizer, data_manager):
         for _ in range(num_workers):
             task_queue.put(None)
 
-        time.sleep(5)
-        log.info(f"Finished processing abstracts", total_processed=total_processed)
+        time.sleep(3)
+        log.info("Finished processing documents", total_processed=total_processed)
 
     # Close data manager
     data_manager.close()
@@ -185,13 +189,13 @@ def explain(args, model, tokenizer, data_manager):
 
 def visualize(args, model, tokenizer, data_manager):
     # Load data into a DataFrame
-    df = data_manager.load_data()
+    df = data_manager.load_input_data()
 
     # Get one gpu if available
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     log = structlog.get_logger().bind(device=device)
     model = model.to(device)
-    explainer = get_explainer(args.method, model, tokenizer, device, args)
+    explainer = get_explainer(args.method, model, tokenizer, device, args.model_family)
 
     # Get abstract by index and explanation
     abstract = df.iloc[args.index].abstract
@@ -249,7 +253,7 @@ def visualize(args, model, tokenizer, data_manager):
         or xai_output.xai_method == ExplainerMethod.SHAP_PARTITION_TFIDF,
     )
     # Create visualization and save it
-    from app.utils.sdg import get_sdg_colormap
+    from sdgrs_xai.utils.sdg import get_sdg_colormap
 
     # check if args.output_path is a directory
     output_path = args.output_path
@@ -304,7 +308,7 @@ def evaluate(args, model, tokenizer, data_manager):
     xai_evaluator = XAIEvaluator(model, tokenizer, device)
 
     # Load data into a DataFrame
-    df = data_manager.load_data()
+    df = data_manager.load_input_data()
 
     evaluations_for_explanations, start_index = None, args.start_index or 0
 
@@ -351,9 +355,7 @@ def evaluate(args, model, tokenizer, data_manager):
         evaluation_shape=evaluations_for_explanations.shape,
     )
 
-
-if __name__ == "__main__":
-
+def main():
     parser = argparse.ArgumentParser(
         prog="SDG text-classification explainer CLI",
         description="CLI for XAI explanation generation for SDG text classification models.",
@@ -385,7 +387,7 @@ if __name__ == "__main__":
         "--data-source-target",
         type=DataSource,
         action=EnumAction,
-        required=True,
+        default=DataSource.LOCAL,
         help="Specifies the source and target of input data (abstracts, explanations)",
     )
     parser.add_argument(
@@ -422,7 +424,6 @@ if __name__ == "__main__":
         "--n-publications",
         help="Limit of publications to process in total.",
         type=int,
-        default=100,
     )
 
     # 'Visualize' action / mode
@@ -470,7 +471,7 @@ if __name__ == "__main__":
         )
 
     log.info("Parsed arguments, loading model and tokenizer...")
-    model, tokenizer = setup_model_and_tokenizer(args)
+    model, tokenizer = setup_model_and_tokenizer(model_family=args.model_family, method=args.method, model_path=args.model_path)
     log.info("Loaded model and tokenizer", model_family=args.model_family)
 
     # Setup data manager
@@ -499,3 +500,7 @@ if __name__ == "__main__":
         visualize(args, model, tokenizer, data_manager)
     elif args.action == "evaluate":
         evaluate(args, model, tokenizer, data_manager)
+
+
+if __name__ == "__main__":
+    main()

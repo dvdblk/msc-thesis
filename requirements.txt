@@ -4,7 +4,6 @@
 #
 #    pip-compile --output-file=requirements.txt requirements.in
 #
---extra-index-url https://download.pytorch.org/whl/cu118
 
 accelerate==0.30.1
     # via

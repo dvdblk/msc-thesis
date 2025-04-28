@@ -1,0 +1,51 @@
+[project]
+name = "sdgrs-xai"
+version = "0.1.0"
+description = "XAI tools for SDG Research Scout @ UZH CL"
+authors = [
+    {name = "David",email = "git@dvdblk.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "shap (==0.45.0)",
+    "transformers[sentencepiece,tokenizers] (==4.41.2)",
+    "pandas (==2.2.2)",
+    "langdetect (==1.0.9)",
+    "matplotlib (==3.9.0)",
+    "nltk (==3.8.1)",
+    "peft (==0.11.1)",
+    "bitsandbytes (==0.43.1)",
+    "accelerate (==0.30.1)",
+    "evaluate (==0.4.2)",
+    "sentencepiece (==0.2.0)",
+    "datasets (==2.19.2)",
+    "lime (==0.2.0.1)",
+    "wandb (==0.17.0)",
+    "inseq[notebook] (==0.6.0)",
+    "python-dotenv (==1.0.1)",
+    "structlog (==24.2.0)",
+    "lxt @ git+https://github.com/dvdblk/LRP-eXplains-Transformers.git@main",
+    "torch (>=2.7.0,<3.0.0)"
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+ipywidgets = "^8.1.6"
+
+
+[[tool.poetry.source]]
+name = "cu118"
+url = "https://download.pytorch.org/whl/cu118"
+priority = "supplemental"
+
+
+[tool.poetry.dependencies]
+torch = {source = "cu118"}
+
+[tool.poetry.scripts]
+sdgrs-xai-cli = "sdgrs_xai.main:main"

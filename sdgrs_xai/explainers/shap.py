@@ -6,8 +6,8 @@ import torch
 from shap.maskers import Text as TextMasker
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from app.explainers.base import BaseExplainer
-from app.explainers.model import XAIOutput, ExplainerMethod
+from sdgrs_xai.explainers.base import BaseExplainer
+from sdgrs_xai.explainers.model import XAIOutput, ExplainerMethod
 
 
 class TFIDFTextMasker(shap.maskers.Text):

@@ -3,9 +3,9 @@ import torch
 from lxt.models.bert import attnlrp as bert_attnlrp, cp_lrp as bert_cplrp
 from lxt.models.llama import attnlrp as llama_attnlrp, cp_lrp as llama_cplrp
 
-from app.explainers.base import BaseExplainer
-from app.explainers.model import XAIOutput, ExplainerMethod
-from app.utils.tokenization import fix_bert_tokenization
+from sdgrs_xai.explainers.base import BaseExplainer
+from sdgrs_xai.explainers.model import XAIOutput, ExplainerMethod
+from sdgrs_xai.utils.tokenization import fix_bert_tokenization
 
 
 class LRPExplainer(BaseExplainer):

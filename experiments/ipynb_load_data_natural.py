@@ -9,7 +9,7 @@ from datasets import load_dataset, Dataset
 from sklearn.model_selection import train_test_split
 import pickle
 
-from ipynb_util_tars import DATA_DIR_PATH, BASE_DIR_PATH, SEED
+from ipynb_util import DATA_DIR_PATH, BASE_DIR_PATH, SEED
 
 
 class DatasetType(Enum):
@@ -99,7 +99,6 @@ print("Decoded (id2label) label:\t", id2label[example["SDG"]])
 
 print(id2label[16], label2id[id2label[16]], label2id["9"])
 
-from transformers import AutoTokenizer
 
 # whether the text should be lowered or not
 SHOULD_LOWER = False

@@ -2,9 +2,9 @@ import torch
 from captum.attr import InputXGradient, IntegratedGradients, Saliency
 from torch.nn.parallel import DataParallel
 
-from app.explainers.base import BaseExplainer
-from app.explainers.model import XAIOutput, ExplainerMethod
-from app.utils.tokenization import fix_bert_tokenization
+from sdgrs_xai.explainers.base import BaseExplainer
+from sdgrs_xai.explainers.model import XAIOutput, ExplainerMethod
+from sdgrs_xai.utils.tokenization import fix_bert_tokenization
 
 
 class GradientExplainer(BaseExplainer):
