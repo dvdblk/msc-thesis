@@ -73,8 +73,8 @@ print("Example instance:\t", example)
 labels = set(dataset["train"]["SDG"])
 
 # Create id2label and label2id dictionaries
-id2label = {i: str(i + 1) for i in range(len(labels))}
-label2id = {str(i + 1): i for i in range(len(labels))}
+id2label = {i: str(i ) for i in range(len(labels))}
+label2id = {str(i ): i for i in range(len(labels))}
 
 # Print the results
 print("id2label:", id2label)
