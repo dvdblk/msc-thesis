@@ -21,7 +21,7 @@ class DatasetType(Enum):
     SWISSTEXT_SHARED_TASK1 = "swisstext_shared_task1"
 
 
-TEST_SIZE = 0.3
+TEST_SIZE = 0.1964
 DATASET_TYPE = DatasetType.ZO_UP
 
 # load the dataset
@@ -38,7 +38,7 @@ match DATASET_TYPE:
         dataset = dataset.rename_columns({"sdg": "SDG", "abstract": "ABSTRACT"})
 
         def convert_sdg_to_0indexed_int(d):
-            d["SDG"] = int(d["SDG"]) - 1
+            d["SDG"] = int(d["SDG"]) 
             return d
 
         dataset = dataset.map(convert_sdg_to_0indexed_int)
