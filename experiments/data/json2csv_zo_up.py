@@ -52,23 +52,29 @@ sdg_descriptions = {
     17: ("Partnerships for the Goals", "Aims to strengthen the means of implementation and revitalize the global partnership for sustainable development.")
 }
 
-# Input and output file paths
-input_file = 'zo_up_sdg0.jsonl'
-output_file = 'zo_up_sdg0_converted_with_title.csv'
 
 def convert_jsonl_to_csv(input_file, output_file):
     """Convert a JSONL file to a CSV file with the specified format."""
+    converted_count = 0  # Initialize a counter for converted records
+
     with open(input_file, 'r') as jsonl_file, open(output_file, 'w', newline='') as csv_file:
         csv_writer = csv.writer(csv_file)
-        csv_writer.writerow(csv_headers)  # Write the header row
+        #csv_writer.writerow(csv_headers)  # Write the header row
 
         for line in jsonl_file:
             record = json.loads(line.strip())
+            ID = record.get('ID', '')
+            if not ID:
+                print("No ID found in the record. Skipping...")
+                continue
+            else:
+                print(f"Processing record with ID: {ID}")
+            converted_count += 1  # Increment the counter for each valid record
             sdg = record.get('SDG', 0)
             sdg_desc_short, sdg_desc_long = sdg_descriptions.get(sdg, ("", ""))
-            title = record.get('TITLE', '')
-            abstract = record.get('ABSTRACT', '')
-            combined_abstract = f"{title}: {abstract}" if title and abstract else title or abstract
+            title = record.get('TITLE', '').replace('\n', ' ').replace('\r', ' ')
+            abstract = record.get('ABSTRACT', '').replace('\n', ' ').replace('\r', ' ')
+            combined_abstract = f"{title}: {abstract}" if title and abstract else abstract
             csv_writer.writerow([
                 sdg,
                 combined_abstract,
@@ -78,6 +84,7 @@ def convert_jsonl_to_csv(input_file, output_file):
             ])
 
     print(f"Conversion completed. CSV file saved to {output_file}")
+    print(f"Total records converted: {converted_count}")  # Report the total count
 
 if __name__ == "__main__":
     # Set up argument parser
